@@ -1,0 +1,106 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mcunodes.embewi.io
+spec:
+  group: embewi.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Node ID
+          type: string
+          jsonPath: .spec.nodeId
+        - name: IP
+          type: string
+          jsonPath: .status.ip
+        - name: State
+          type: string
+          jsonPath: .status.state
+        - name: Version
+          type: string
+          jsonPath: .status.firmwareVersion
+        - name: Ready
+          type: boolean
+          jsonPath: .status.ready
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [nodeId]
+              properties:
+                nodeId:
+                  type: string
+                  description: "Identifiant node (doit correspondre à EMBEWI_NODE_ID dans le firmware)"
+            status:
+              type: object
+              properties:
+                ip:
+                  type: string
+                state:
+                  type: string
+                  enum: [booting, pending_verify, running, degraded, rollback, failed]
+                firmwareName:
+                  type: string
+                firmwareVersion:
+                  type: string
+                firmwareDigest:
+                  type: string
+                deploymentId:
+                  type: string
+                otaValidated:
+                  type: boolean
+                heapFree:
+                  type: integer
+                rssi:
+                  type: integer
+                uptimeMs:
+                  type: integer
+                  format: int64
+                chip:
+                  type: string
+                idfVersion:
+                  type: string
+                flashSize:
+                  type: integer
+                  format: int64
+                ramSize:
+                  type: integer
+                  format: int64
+                appPort:
+                  type: integer
+                ready:
+                  type: boolean
+                lastHeartbeat:
+                  type: string
+                  format: date-time
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+  scope: Namespaced
+  names:
+    plural: mcunodes
+    singular: mcunode
+    kind: McuNode
+    shortNames: [mcu]

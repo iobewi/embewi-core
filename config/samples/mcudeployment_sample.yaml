@@ -1,0 +1,13 @@
+apiVersion: embewi.io/v1alpha1
+kind: McuDeployment
+metadata:
+  name: wheel-controller-v1-1-0
+  namespace: default
+spec:
+  nodeName: esp32-motor-left           # pin explicite (recommandé)
+  # nodeSelector:                      # alternative : sélection par labels
+  #   role: motor
+  firmware:
+    image: registry.local/embewi/wheel-controller:v1.1.0
+    name: wheel-controller
+    version: 1.1.0

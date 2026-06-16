@@ -1,0 +1,92 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mcudeployments.embewi.io
+spec:
+  group: embewi.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Node
+          type: string
+          jsonPath: .spec.nodeName
+        - name: Image
+          type: string
+          jsonPath: .spec.firmware.image
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [firmware]
+              properties:
+                nodeName:
+                  type: string
+                  description: "Pin explicite sur un McuNode (recommandé)"
+                nodeSelector:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: "Sélection par labels (doit résoudre exactement 1 node)"
+                firmware:
+                  type: object
+                  required: [image]
+                  properties:
+                    image:
+                      type: string
+                      description: "Référence OCI (ex: registry.local/embewi/wheel-controller:v1.1.0)"
+                    name:
+                      type: string
+                    version:
+                      type: string
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Binding, Pulling, Preparing, Writing, Activating, Confirming, Deployed, Failed]
+                boundNode:
+                  type: string
+                deploymentId:
+                  type: string
+                digest:
+                  type: string
+                size:
+                  type: integer
+                  format: int64
+                  description: "Taille en octets du blob firmware"
+                message:
+                  type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+  scope: Namespaced
+  names:
+    plural: mcudeployments
+    singular: mcudeployment
+    kind: McuDeployment
+    shortNames: [mcudep]

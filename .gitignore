@@ -1,0 +1,41 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+
+# Claude Code
+.claude/
+settings.local.json
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of `go env GOPATH`/bin
+/go/bin/
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Build cache
+.cache/
+
+# Coverage output
+*.out
+coverage.html
+
+# Air live reload
+tmp/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

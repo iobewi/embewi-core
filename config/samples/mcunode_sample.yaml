@@ -1,0 +1,10 @@
+apiVersion: embewi.io/v1alpha1
+kind: McuNode
+metadata:
+  name: esp32-motor-left
+  namespace: default
+  labels:
+    role: motor
+    side: left
+spec:
+  nodeId: esp32-motor-left   # doit correspondre exactement à EMBEWI_NODE_ID dans le firmware
