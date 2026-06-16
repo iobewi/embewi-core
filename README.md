@@ -296,6 +296,6 @@ go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
 | Machine d'état OTA (phases) | ✅ |
 | Client HTTPS agent ESP | ✅ |
 | Pull OCI firmware (manifest + blob) | ✅ |
-| Stream binaire PUT /ota/write | TODO (reader OCI) |
-| Tokens depuis Secret K8s | TODO |
+| Stream binaire PUT /ota/write | ✅ |
+| Tokens depuis Secret K8s | ✅ |
 | Déploiement in-cluster (Deployment + RBAC) | TODO |
