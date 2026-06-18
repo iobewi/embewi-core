@@ -47,27 +47,24 @@ func (r *McuNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	// Calcule ready selon §8 contrat :
-	//   true  ssi state==running && ota_validated==true && heartbeat récent
-	//   false pour pending_verify, degraded, rollback, failed, timeout
-	wantReady := false
-	if node.Status.State == "running" && node.Status.OtaValidated &&
-		node.Status.LastHeartbeat != nil &&
-		time.Since(node.Status.LastHeartbeat.Time) <= HeartbeatTimeout {
-		wantReady = true
+	// Détecte le timeout heartbeat — device offline si le dernier heartbeat est trop vieux.
+	heartbeatExpired := node.Status.LastHeartbeat == nil ||
+		time.Since(node.Status.LastHeartbeat.Time) > HeartbeatTimeout
+
+	wantReady := !heartbeatExpired && node.Status.State == "running" && node.Status.OtaValidated
+	wantState := node.Status.State
+	if heartbeatExpired && node.Status.State != "offline" && node.Status.LastHeartbeat != nil {
+		wantState = "offline"
 	}
 
-	if wantReady != node.Status.Ready {
-		reason := "heartbeat timeout"
-		if node.Status.State != "running" || !node.Status.OtaValidated {
-			reason = "state=" + node.Status.State
-		}
+	if wantReady != node.Status.Ready || wantState != node.Status.State {
 		patch := client.MergeFrom(node.DeepCopy())
 		node.Status.Ready = wantReady
+		node.Status.State = wantState
 		if err := r.Status().Patch(ctx, &node, patch); err != nil {
 			return ctrl.Result{}, err
 		}
-		logger.Info("ready →", "ready", wantReady, "reason", reason)
+		logger.Info("status →", "state", wantState, "ready", wantReady)
 	}
 
 	// Réconcilie Service + EndpointSlice uniquement si on a une IP.
