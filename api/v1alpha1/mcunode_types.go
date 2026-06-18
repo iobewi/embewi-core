@@ -30,7 +30,8 @@ type McuNodeStatus struct {
 	// IP de management du device (extraite des heartbeats).
 	IP string `json:"ip,omitempty"`
 
-	// État courant de l'agent (booting|pending_verify|running|degraded|rollback|failed).
+	// État courant de l'agent (booting|pending_verify|running|degraded|rollback|failed|offline).
+	// +kubebuilder:validation:Enum=booting;pending_verify;running;degraded;rollback;failed;offline
 	State string `json:"state,omitempty"`
 
 	// Informations firmware courant.

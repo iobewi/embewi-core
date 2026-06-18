@@ -47,7 +47,7 @@ spec:
                   type: string
                 state:
                   type: string
-                  enum: [booting, pending_verify, running, degraded, rollback, failed]
+                  enum: [booting, pending_verify, running, degraded, rollback, failed, offline]
                 firmwareName:
                   type: string
                 firmwareVersion:
