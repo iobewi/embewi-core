@@ -11,24 +11,19 @@ spec:
       subresources:
         status: {}
       additionalPrinterColumns:
-        - name: Node ID
-          type: string
-          jsonPath: .spec.nodeId
-        - name: IP
-          type: string
-          jsonPath: .status.ip
-        - name: State
+        - name: Status
           type: string
           jsonPath: .status.state
-        - name: Version
-          type: string
-          jsonPath: .status.firmwareVersion
-        - name: Ready
-          type: boolean
-          jsonPath: .status.ready
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
+        - name: Version
+          type: string
+          jsonPath: .status.firmwareVersion
+        - name: IP
+          type: string
+          jsonPath: .status.ip
+          priority: 1
       schema:
         openAPIV3Schema:
           type: object

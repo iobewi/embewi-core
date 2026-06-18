@@ -7,12 +7,10 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 //
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Node ID",type=string,JSONPath=`.spec.nodeId`
-// +kubebuilder:printcolumn:name="IP",type=string,JSONPath=`.status.ip`
-// +kubebuilder:printcolumn:name="State",type=string,JSONPath=`.status.state`
-// +kubebuilder:printcolumn:name="Version",type=string,JSONPath=`.status.firmwareVersion`
-// +kubebuilder:printcolumn:name="Ready",type=boolean,JSONPath=`.status.ready`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.state`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Version",type=string,JSONPath=`.status.firmwareVersion`
+// +kubebuilder:printcolumn:name="IP",type=string,JSONPath=`.status.ip`,priority=1
 type McuNode struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
