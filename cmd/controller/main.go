@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"strings"
 
 	discoveryv1 "k8s.io/api/discovery/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -58,14 +59,18 @@ func main() {
 	}
 
 	// Client OCI configuré via variables d'environnement.
-	// OCI_REGISTRY_USER / OCI_REGISTRY_PASS : auth Basic (Harbor, Zot, etc.)
-	// OCI_INSECURE_TLS=true                 : skip vérification certificat TLS
+	// OCI_REGISTRY_USER / OCI_REGISTRY_PASS   : auth Basic (Harbor, Zot, etc.)
+	// OCI_INSECURE_TLS=true                   : skip vérification certificat TLS
+	// OCI_PLAIN_HTTP_REGISTRIES=host:port,... : registres en HTTP plain (ex: Zot local)
 	ociOpts := []oci.Option{}
 	if user := os.Getenv("OCI_REGISTRY_USER"); user != "" {
 		ociOpts = append(ociOpts, oci.WithBasicAuth(user, os.Getenv("OCI_REGISTRY_PASS")))
 	}
 	if os.Getenv("OCI_INSECURE_TLS") == "true" {
 		ociOpts = append(ociOpts, oci.WithInsecureTLS())
+	}
+	if plain := os.Getenv("OCI_PLAIN_HTTP_REGISTRIES"); plain != "" {
+		ociOpts = append(ociOpts, oci.WithPlainHTTPRegistries(strings.Split(plain, ",")...))
 	}
 
 	// McuNode controller — EndpointSlice + timeout heartbeat.

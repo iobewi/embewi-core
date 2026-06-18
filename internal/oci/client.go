@@ -25,9 +25,10 @@ const (
 
 // Client est un client OCI léger : résolution de manifeste + pull de blob.
 type Client struct {
-	http     *http.Client
-	username string
-	password string
+	http          *http.Client
+	username      string
+	password      string
+	plainHTTP     map[string]bool // registres à contacter en HTTP plain (ex: Zot local)
 }
 
 // Option configure un Client.
@@ -46,6 +47,19 @@ func WithInsecureTLS() Option {
 	return func(c *Client) {
 		c.http.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // registre local auto-signé
+		}
+	}
+}
+
+// WithPlainHTTPRegistries liste les registres à contacter en HTTP plain (ex: Zot NodePort local).
+// Format : "host:port" ou "host", séparés par des virgules.
+func WithPlainHTTPRegistries(registries ...string) Option {
+	return func(c *Client) {
+		if c.plainHTTP == nil {
+			c.plainHTTP = make(map[string]bool)
+		}
+		for _, r := range registries {
+			c.plainHTTP[r] = true
 		}
 	}
 }
@@ -105,7 +119,7 @@ func (c *Client) StreamBlob(ctx context.Context, image, digest string) (io.ReadC
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s://%s/v2/%s/blobs/%s", scheme(r.registry), r.registry, r.repo, digest)
+	url := fmt.Sprintf("%s://%s/v2/%s/blobs/%s", c.scheme(r.registry), r.registry, r.repo, digest)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -167,8 +181,11 @@ func parseRef(image string) (ref, error) {
 	return ref{registry: registry, repo: rest, tag: tag}, nil
 }
 
-// scheme retourne "http" pour les registres locaux (localhost, 127.x.x.x), "https" sinon.
-func scheme(registry string) string {
+// scheme retourne le schéma HTTP à utiliser pour ce registre.
+func (c *Client) scheme(registry string) string {
+	if c.plainHTTP[registry] {
+		return "http"
+	}
 	host := registry
 	if h, _, err := net.SplitHostPort(registry); err == nil {
 		host = h
@@ -180,7 +197,7 @@ func scheme(registry string) string {
 }
 
 func (c *Client) getManifest(ctx context.Context, r ref) (*manifest, error) {
-	url := fmt.Sprintf("%s://%s/v2/%s/manifests/%s", scheme(r.registry), r.registry, r.repo, r.tag)
+	url := fmt.Sprintf("%s://%s/v2/%s/manifests/%s", c.scheme(r.registry), r.registry, r.repo, r.tag)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err

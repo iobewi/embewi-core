@@ -1,7 +1,7 @@
 BINARY   = embewi-core
 IMG      ?= embewi/core:latest
 
-.PHONY: build tidy generate manifests docker-build docker-push install uninstall deploy
+.PHONY: build tidy generate manifests docker-build docker-push install uninstall deploy registry
 
 build:
 	go build -o bin/$(BINARY) ./cmd/controller/
@@ -36,3 +36,7 @@ deploy: install
 uninstall:
 	kubectl delete -f config/manager/deployment.yaml --ignore-not-found
 	kubectl delete -f config/rbac/ --ignore-not-found
+
+# Déploie le registre OCI Zot in-cluster.
+registry:
+	kubectl apply -f config/registry/zot.yaml
