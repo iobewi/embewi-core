@@ -101,6 +101,33 @@ export OCI_INSECURE_TLS=true
 
 > Le controller utilise `~/.kube/config` automatiquement hors cluster.
 
+### 7. Déploiement in-cluster (production)
+
+```bash
+# 1. Builder et pousser l'image sur le registre
+make docker-build docker-push IMG=registry.local/embewi/core:latest
+
+# Sur k0s sans registre : importer l'image directement
+docker save embewi/core:latest | ssh <node-k0s> sudo k0s ctr images import -
+
+# 2. Installer CRDs + RBAC + Deployment en une commande
+make deploy IMG=registry.local/embewi/core:latest
+
+# 3. Créer le Secret des tokens dans le bon namespace
+kubectl create secret generic embewi-tokens \
+  --namespace embewi-system \
+  --from-literal=<nodeId>="<token>"
+
+# 4. Vérifier
+kubectl rollout status deployment/embewi-core -n embewi-system
+kubectl logs -n embewi-system -l app=embewi-core -f
+```
+
+Le port heartbeat est exposé en **NodePort 30880** — c'est cette adresse que tu provisiones comme `ctrl_url` dans le portail captif :
+```
+http://<IP-node-k0s>:30880
+```
+
 ---
 
 ## Utilisation
@@ -298,4 +325,4 @@ go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
 | Pull OCI firmware (manifest + blob) | ✅ |
 | Stream binaire PUT /ota/write | ✅ |
 | Tokens depuis Secret K8s | ✅ |
-| Déploiement in-cluster (Deployment + RBAC) | TODO |
+| Déploiement in-cluster (Deployment + RBAC) | ✅ |

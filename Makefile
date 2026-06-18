@@ -1,7 +1,7 @@
 BINARY   = embewi-core
 IMG      ?= embewi/core:latest
 
-.PHONY: build tidy generate manifests docker-build
+.PHONY: build tidy generate manifests docker-build docker-push install uninstall deploy
 
 build:
 	go build -o bin/$(BINARY) ./cmd/controller/
@@ -19,3 +19,20 @@ manifests:
 
 docker-build:
 	docker build -t $(IMG) .
+
+docker-push: docker-build
+	docker push $(IMG)
+
+# Installe les CRDs + RBAC sur le cluster courant.
+install:
+	kubectl apply -f config/crd/bases/
+	kubectl apply -f config/rbac/
+
+# Déploie le controller (namespace + Deployment + Service heartbeat).
+deploy: install
+	kubectl apply -f config/manager/deployment.yaml
+
+# Supprime le controller et le RBAC (conserve les CRDs et les ressources utilisateur).
+uninstall:
+	kubectl delete -f config/manager/deployment.yaml --ignore-not-found
+	kubectl delete -f config/rbac/ --ignore-not-found
