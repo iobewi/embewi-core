@@ -39,3 +39,4 @@ tmp/
 *.swp
 *.swo
 *~
+docs/_build/

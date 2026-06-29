@@ -28,6 +28,12 @@ RUN apt-get update && apt-get install -y \
  && update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 \
  && rm -rf /var/lib/apt/lists/*
 
+# Documentation Sphinx (docs/) — mêmes contraintes que docs/requirements.txt
+RUN pip3 install --no-cache-dir \
+    "sphinx>=7.2,<9" \
+    "myst-parser>=2.0,<5" \
+    "sphinx-rtd-theme>=3.0" \
+    "sphinxcontrib-mermaid>=0.9"
 ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8

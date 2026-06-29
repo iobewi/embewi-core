@@ -1,7 +1,8 @@
 BINARY   = embewi-core
 IMG      ?= embewi/core:latest
+DOCS_DIR = docs
 
-.PHONY: build tidy generate manifests docker-build docker-push install uninstall deploy registry
+.PHONY: build tidy generate manifests docker-build docker-push install uninstall deploy registry docs
 
 build:
 	go build -o bin/$(BINARY) ./cmd/controller/
@@ -40,3 +41,7 @@ uninstall:
 # Déploie le registre OCI Zot in-cluster.
 registry:
 	kubectl apply -f config/registry/zot.yaml
+
+# Génère la doc HTML dans docs/_build/html/.
+docs:
+	sphinx-build -b html $(DOCS_DIR) $(DOCS_DIR)/_build/html
