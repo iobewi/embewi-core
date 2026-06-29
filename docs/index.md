@@ -10,23 +10,30 @@ endpoints routables dans le cluster.
   réconcilie, pousse OTA                  reçoit, valide, exécute
 ```
 
-## Architecture & contrôleurs
+## Core
 
 ```{toctree}
 :maxdepth: 2
-:caption: Référence
+:caption: Core
 
-Vue d'ensemble <embewi-core>
-API CRD <embewi-api>
+Architecture & heartbeat server <core/architecture>
+CRD — McuNode, McuDeployment <core/crd>
+Contrôleurs <core/controllers>
+Client OCI <core/oci>
+API agent (Core → ESP) <core/agent-api>
+Configuration <core/configuration>
+Design interne <core/design>
 ```
 
-## Conception interne
+## Utilisation
 
 ```{toctree}
 :maxdepth: 2
-:caption: Design
+:caption: Utilisation
 
-Notes de conception <embewi-core-design>
+Enrôler un device <usage/enroller-un-device>
+Déployer un firmware <usage/deployer-un-firmware>
+Opérations courantes <usage/operations>
 ```
 
 ## Dépôts & docs système
@@ -37,6 +44,3 @@ Notes de conception <embewi-core-design>
   firmware ESP32/ESP-IDF · [📖 doc](https://iobewi.github.io/embewi-agent-esp/).
 - **Core** — [`iobewi/embewi-core`](https://github.com/iobewi/embewi-core) :
   ce dépôt.
-
-> Principe : le **contrat** (transverse, versionné) vit dans `iobewi/embewi` ;
-> la doc **propre au Core** vit ici, avec le code.
