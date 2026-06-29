@@ -14,6 +14,9 @@ myst_heading_anchors = 3
 
 exclude_patterns = ["_build", "requirements.txt", "conf.py", "Thumbs.db", ".DS_Store"]
 
+# Supprime le warning de coloration syntaxique sur les blocs JSON tronqués (ex. "...").
+suppress_warnings = ["misc.highlighting_failure"]
+
 html_theme = "sphinx_rtd_theme"
 html_title = "Embewi Core — Documentation"
 html_theme_options = {
