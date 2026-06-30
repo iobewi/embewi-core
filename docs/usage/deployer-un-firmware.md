@@ -1,7 +1,7 @@
 # Déployer un firmware
 
 Un `McuDeployment` orchestre le transfert OTA d'un firmware depuis un registre
-OCI vers un device ESP32. Le Core gère toutes les phases automatiquement.
+OCI vers un MCU. Le Core gère toutes les phases automatiquement.
 
 ---
 

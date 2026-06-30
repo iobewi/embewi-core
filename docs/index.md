@@ -1,12 +1,15 @@
 # Embewi Core — Documentation
 
-**Embewi Core** est le contrôleur Kubernetes qui pilote des devices ESP32 via le
-[contrat `v1alpha1`](https://github.com/iobewi/embewi). Il gère le cycle de vie
-des firmwares (OTA), la configuration runtime et l'exposition des devices comme
-endpoints routables dans le cluster.
+**Embewi Core** est le contrôleur Kubernetes qui pilote des MCU (microcontrôleurs)
+connectés via le [contrat `v1alpha1`](https://github.com/iobewi/embewi). Il gère
+le cycle de vie des firmwares (OTA), la configuration runtime et l'exposition des
+devices comme endpoints routables dans le cluster.
+
+L'implémentation agent actuelle cible ESP32/ESP-IDF, mais le contrat `v1alpha1`
+est indépendant du matériel — tout MCU capable de parler HTTPS peut être supporté.
 
 ```text
-  Core (Kubernetes, Go)  ── v1alpha1 ──►  Agent (ESP32, ESP-IDF)
+  Core (Kubernetes, Go)  ── v1alpha1 ──►  Agent MCU (ex: ESP32/ESP-IDF)
   réconcilie, pousse OTA                  reçoit, valide, exécute
 ```
 
@@ -20,7 +23,7 @@ Architecture & heartbeat server <core/architecture>
 CRD — McuNode, McuDeployment <core/crd>
 Contrôleurs <core/controllers>
 Client OCI <core/oci>
-API agent (Core → ESP) <core/agent-api>
+API agent (Core ↔ MCU) <core/agent-api>
 Configuration <core/configuration>
 Design interne <core/design>
 ```

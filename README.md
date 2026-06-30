@@ -1,12 +1,15 @@
 # Embewi Core
 
-Kubernetes Runtime Controller pour devices ESP32 (MCU).  
-Gère le cycle de vie OTA, l'état des devices et le routage réseau via EndpointSlices.
+Contrôleur Kubernetes pour MCU (microcontrôleurs) connectés — cycle de vie OTA,
+configuration runtime et routage réseau via EndpointSlices.
+
+> Implémentation agent actuelle : ESP32/ESP-IDF. Le contrat `v1alpha1` est
+> indépendant du matériel.
 
 ## Architecture
 
 ```
-ESP32 Agent (HTTPS :443)          Embewi Core (Go)
+MCU Agent (HTTPS :443)            Embewi Core (Go)
 ┌─────────────────────┐          ┌──────────────────────────────┐
 │ GET  /v1alpha1/info │◄─────────┤ McuDeploymentReconciler      │
 │ POST /ota/prepare   │◄─────────┤  Binding → Pulling →         │

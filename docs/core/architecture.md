@@ -3,7 +3,7 @@
 ## Vue d'ensemble
 
 ```text
-ESP32 Agent (HTTPS :443)              Embewi Core (Go)
+MCU Agent (HTTPS :443)                Embewi Core (Go)
 ┌─────────────────────┐              ┌────────────────────────────────────┐
 │ GET  /v1alpha1/info │◄─────────────┤ McuDeploymentReconciler            │
 │ POST /ota/prepare   │◄─────────────┤  Binding → Pulling →               │
