@@ -49,9 +49,13 @@ type LogPayload struct {
 }
 
 // Server écoute sur addr et met à jour les McuNode via le client K8s.
+// En production les devices ESP imposent HTTPS (§1 contrat) : configurer TLSCertFile/TLSKeyFile
+// ou terminer TLS à l'ingress/proxy devant ce serveur.
 type Server struct {
-	addr   string
-	client client.Client
+	addr        string
+	client      client.Client
+	TLSCertFile string // chemin PEM du certificat serveur (vide = HTTP plain)
+	TLSKeyFile  string // chemin PEM de la clé privée
 }
 
 func New(addr string, c client.Client) *Server {
@@ -85,9 +89,16 @@ func (s *Server) Start(ctx context.Context) error {
 		_ = srv.Shutdown(context.Background())
 	}()
 
-	log.FromContext(ctx).Info("heartbeat server started", "addr", s.addr)
-	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
-		return err
+	if s.TLSCertFile != "" && s.TLSKeyFile != "" {
+		log.FromContext(ctx).Info("heartbeat server started (TLS)", "addr", s.addr)
+		if err := srv.ServeTLS(ln, s.TLSCertFile, s.TLSKeyFile); err != nil && err != http.ErrServerClosed {
+			return err
+		}
+	} else {
+		log.FromContext(ctx).Info("heartbeat server started (plain HTTP — TLS recommandé en prod)", "addr", s.addr)
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			return err
+		}
 	}
 	return nil
 }

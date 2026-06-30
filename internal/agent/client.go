@@ -14,31 +14,39 @@ import (
 )
 
 const (
-	apiPrefix  = "/v1alpha1"
+	apiPrefix   = "/v1alpha1"
 	httpTimeout = 10 * time.Second
 )
 
 // Client appelle l'API HTTPS de l'agent sur un device ESP.
 type Client struct {
-	baseURL string // ex: "https://192.168.10.50"
-	token   string
-	http    *http.Client
+	baseURL    string       // ex: "https://192.168.10.50"
+	token      string
+	http       *http.Client // appels rapides : timeout 10 s
+	httpStream *http.Client // streaming OTA : sans timeout global (piloté par le contexte)
 }
 
 func New(ip, token string) *Client {
+	// Transport partagé entre les deux clients pour réutiliser les connexions TLS.
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // cert auto-signé agent
+	}
 	return &Client{
 		baseURL: "https://" + ip,
 		token:   token,
 		http: &http.Client{
-			Timeout: httpTimeout,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // cert auto-signé agent
-			},
+			Timeout:   httpTimeout,
+			Transport: transport,
+		},
+		httpStream: &http.Client{
+			// Pas de Timeout : http.Client.Timeout couvre l'upload complet.
+			// Un firmware de 1 MB sur Wi-Fi congestionné dépasse largement 10 s.
+			Transport: transport,
 		},
 	}
 }
 
-func (c *Client) do(method, path string, body io.Reader, extraHeaders map[string]string) (*http.Response, error) {
+func (c *Client) doWith(hc *http.Client, method, path string, body io.Reader, extraHeaders map[string]string) (*http.Response, error) {
 	req, err := http.NewRequest(method, c.baseURL+apiPrefix+path, body)
 	if err != nil {
 		return nil, err
@@ -47,7 +55,11 @@ func (c *Client) do(method, path string, body io.Reader, extraHeaders map[string
 	for k, v := range extraHeaders {
 		req.Header.Set(k, v)
 	}
-	return c.http.Do(req)
+	return hc.Do(req)
+}
+
+func (c *Client) do(method, path string, body io.Reader, extraHeaders map[string]string) (*http.Response, error) {
+	return c.doWith(c.http, method, path, body, extraHeaders)
 }
 
 // InfoResponse correspond au GET /v1alpha1/info.
@@ -140,7 +152,7 @@ func (e *OTAWriteError) Error() string {
 // Retourne *OTAWriteError pour les échecs métier (§4b) afin que le controller
 // puisse émettre le bon Event K8s.
 func (c *Client) OTAWrite(deploymentID, digest string, size int64, firmware io.Reader) error {
-	resp, err := c.do(http.MethodPut, "/ota/write", firmware, map[string]string{
+	resp, err := c.doWith(c.httpStream, http.MethodPut, "/ota/write", firmware, map[string]string{
 		"Content-Type":           "application/octet-stream",
 		"Content-Length":         fmt.Sprintf("%d", size),
 		"X-Embewi-Deployment-Id": deploymentID,

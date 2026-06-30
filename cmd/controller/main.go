@@ -31,17 +31,21 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr   string
-		probeAddr     string
-		heartbeatAddr string
-		tokenSecret   string
-		leaderElect   bool
+		metricsAddr    string
+		probeAddr      string
+		heartbeatAddr  string
+		heartbeatCert  string
+		heartbeatKey   string
+		tokenSecret    string
+		leaderElect    bool
 	)
-	flag.StringVar(&metricsAddr,   "metrics-bind-address", ":8082",         "Adresse des métriques")
-	flag.StringVar(&probeAddr,     "health-probe-address", ":8083",         "Adresse des health probes")
-	flag.StringVar(&heartbeatAddr, "heartbeat-address",    ":8080",         "Adresse du serveur heartbeat ESP→Core")
-	flag.StringVar(&tokenSecret,   "token-secret",         "embewi-tokens", "Nom du Secret K8s contenant les tokens Bearer")
-	flag.BoolVar(&leaderElect,     "leader-elect",         false,           "Activer l'élection de leader")
+	flag.StringVar(&metricsAddr,   "metrics-bind-address",  ":8082",         "Adresse des métriques")
+	flag.StringVar(&probeAddr,     "health-probe-address",  ":8083",         "Adresse des health probes")
+	flag.StringVar(&heartbeatAddr, "heartbeat-address",     ":8080",         "Adresse du serveur heartbeat ESP→Core")
+	flag.StringVar(&heartbeatCert, "heartbeat-tls-cert",    "",              "Certificat TLS PEM pour le serveur heartbeat (vide = HTTP plain)")
+	flag.StringVar(&heartbeatKey,  "heartbeat-tls-key",     "",              "Clé privée TLS PEM pour le serveur heartbeat")
+	flag.StringVar(&tokenSecret,   "token-secret",          "embewi-tokens", "Nom du Secret K8s contenant les tokens Bearer")
+	flag.BoolVar(&leaderElect,     "leader-elect",          false,           "Activer l'élection de leader")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{})))
@@ -93,7 +97,10 @@ func main() {
 	}
 
 	// Serveur heartbeat : reçoit les POST ESP→Core, met à jour les McuNode status.
+	// TLS requis en prod (les devices ESP imposent HTTPS — contrat §1).
 	hbSrv := heartbeat.New(heartbeatAddr, mgr.GetClient())
+	hbSrv.TLSCertFile = heartbeatCert
+	hbSrv.TLSKeyFile = heartbeatKey
 	if err := mgr.Add(hbSrv); err != nil {
 		logger.Error(err, "heartbeat server add failed")
 		os.Exit(1)
