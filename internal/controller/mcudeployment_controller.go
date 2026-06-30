@@ -477,22 +477,34 @@ func (r *McuDeploymentReconciler) phaseConfirming(ctx context.Context, dep *v1al
 	return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 }
 
-// nodeToken charge le token Bearer depuis le Secret K8s r.TokenSecret.
-// Clé du Secret = node.Spec.NodeID (ex: "esp32-motor-left").
-func (r *McuDeploymentReconciler) nodeToken(ctx context.Context, ns, nodeID string) (string, error) {
-	secretName := r.TokenSecret
+// nodeToken charge le token Bearer depuis node.Spec.TokenRef (§1 contrat).
+// Fallback sur le Secret centralisé r.TokenSecret si TokenRef.Name est vide (migration).
+func (r *McuDeploymentReconciler) nodeToken(ctx context.Context, node *v1alpha1.McuNode) (string, error) {
+	secretName := node.Spec.TokenRef.Name
+	secretNS := node.Spec.TokenRef.Namespace
+	if secretNS == "" {
+		secretNS = node.Namespace
+	}
+	tokenKey := "token"
 	if secretName == "" {
-		secretName = "embewi-tokens"
+		// Fallback : Secret centralisé (clé = nodeId) — migration ou test.
+		secretName = r.TokenSecret
+		if secretName == "" {
+			secretName = "embewi-tokens"
+		}
+		secretNS = node.Namespace
+		tokenKey = node.Spec.NodeID
 	}
+
 	var secret corev1.Secret
-	if err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: ns}, &secret); err != nil {
-		return "", fmt.Errorf("secret %q/%q: %w", ns, secretName, err)
+	if err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: secretNS}, &secret); err != nil {
+		return "", fmt.Errorf("secret %q/%q: %w", secretNS, secretName, err)
 	}
-	token, ok := secret.Data[nodeID]
+	tok, ok := secret.Data[tokenKey]
 	if !ok {
-		return "", fmt.Errorf("clé %q absente du secret %q (namespace %s)", nodeID, secretName, ns)
+		return "", fmt.Errorf("clé %q absente du secret %q (namespace %s)", tokenKey, secretName, secretNS)
 	}
-	return strings.TrimSpace(string(token)), nil
+	return strings.TrimSpace(string(tok)), nil
 }
 
 // nodeClient retourne le McuNode résolu et un agent.Client configuré avec le token du Secret.
@@ -504,7 +516,7 @@ func (r *McuDeploymentReconciler) nodeClient(ctx context.Context, dep *v1alpha1.
 	if node.Status.IP == "" {
 		return nil, nil, fmt.Errorf("McuNode %q: IP inconnue (aucun heartbeat reçu)", node.Name)
 	}
-	token, err := r.nodeToken(ctx, dep.Namespace, node.Spec.NodeID)
+	token, err := r.nodeToken(ctx, &node)
 	if err != nil {
 		return nil, nil, err
 	}

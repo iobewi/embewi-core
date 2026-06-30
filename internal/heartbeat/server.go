@@ -66,8 +66,8 @@ func New(addr string, c client.Client) *Server {
 	return &Server{addr: addr, client: c}
 }
 
-// validateToken vérifie le Bearer token du heartbeat contre le Secret K8s.
-// Comparaison temps-constant (§1 contrat).
+// validateToken vérifie le Bearer token du heartbeat contre le Secret K8s référencé
+// par node.Spec.TokenRef (§1 contrat). Comparaison temps-constant.
 func (s *Server) validateToken(ctx context.Context, r *http.Request, node *v1alpha1.McuNode) bool {
 	auth := r.Header.Get("Authorization")
 	if !strings.HasPrefix(auth, "Bearer ") {
@@ -75,16 +75,29 @@ func (s *Server) validateToken(ctx context.Context, r *http.Request, node *v1alp
 	}
 	provided := strings.TrimPrefix(auth, "Bearer ")
 
-	secretName := s.TokenSecret
-	if secretName == "" {
-		secretName = "embewi-tokens"
+	// Résoudre le Secret : node.Spec.TokenRef prioritaire, fallback sur Secret centralisé.
+	secretName := node.Spec.TokenRef.Name
+	secretNS := node.Spec.TokenRef.Namespace
+	if secretNS == "" {
+		secretNS = node.Namespace
 	}
+	tokenKey := "token"
+	if secretName == "" {
+		// Fallback : Secret centralisé (clé = nodeId) — migration ou test.
+		secretName = s.TokenSecret
+		if secretName == "" {
+			secretName = "embewi-tokens"
+		}
+		secretNS = node.Namespace
+		tokenKey = node.Spec.NodeID
+	}
+
 	var secret corev1.Secret
-	if err := s.client.Get(ctx, client.ObjectKey{Name: secretName, Namespace: node.Namespace}, &secret); err != nil {
+	if err := s.client.Get(ctx, client.ObjectKey{Name: secretName, Namespace: secretNS}, &secret); err != nil {
 		log.FromContext(ctx).Error(err, "lecture Secret token échouée", "secret", secretName)
 		return false
 	}
-	expected, ok := secret.Data[node.Spec.NodeID]
+	expected, ok := secret.Data[tokenKey]
 	if !ok {
 		return false
 	}

@@ -19,9 +19,23 @@ type McuNode struct {
 	Status McuNodeStatus `json:"status,omitempty"`
 }
 
+// SecretRef référence un Secret Kubernetes par nom + namespace optionnel.
+type SecretRef struct {
+	// Name : nom du Secret.
+	Name string `json:"name"`
+	// Namespace : namespace du Secret. Défaut = namespace du McuNode si absent.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+}
+
 type McuNodeSpec struct {
 	// NodeID doit correspondre exactement au EMBEWI_NODE_ID compilé dans le firmware.
 	NodeID string `json:"nodeId"`
+
+	// TokenRef référence le Secret K8s portant le token Bearer de ce device (§1 contrat).
+	// Le Secret doit contenir une clé unique dont la valeur est le token Bearer brut.
+	// Exemple : Secret "embewi-a1b2c3-token" → data["token"] = <bearer>.
+	TokenRef SecretRef `json:"tokenRef"`
 }
 
 type McuNodeStatus struct {

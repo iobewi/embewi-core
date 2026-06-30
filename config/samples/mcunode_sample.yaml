@@ -8,3 +8,6 @@ metadata:
     side: left
 spec:
   nodeId: esp32-motor-left   # doit correspondre exactement à EMBEWI_NODE_ID dans le firmware
+  tokenRef:
+    name: esp32-motor-left-token   # Secret K8s portant le token Bearer de ce device (§1 contrat)
+    namespace: default             # optionnel — défaut = namespace du McuNode
