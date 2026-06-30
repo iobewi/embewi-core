@@ -29,6 +29,11 @@ type McuDeploymentSpec struct {
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 
 	Firmware FirmwareSpec `json:"firmware"`
+
+	// ConfigMapRef : nom d'un McuConfigMap dans le même namespace (§7a contrat).
+	// Absent = pas de push config, défauts build actifs.
+	// +optional
+	ConfigMapRef string `json:"configMapRef,omitempty"`
 }
 
 type FirmwareSpec struct {

@@ -60,8 +60,16 @@ func (r *McuDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	// Déploiement terminal — plus de réconciliation.
-	if dep.Status.Phase == v1alpha1.PhaseDeployed || dep.Status.Phase == v1alpha1.PhaseFailed {
+	// Déploiement Failed : terminal.
+	if dep.Status.Phase == v1alpha1.PhaseFailed {
+		return ctrl.Result{}, nil
+	}
+
+	// Déploiement Deployed : terminal pour l'OTA, mais traite les mises à jour config (§7a).
+	if dep.Status.Phase == v1alpha1.PhaseDeployed {
+		if dep.Spec.ConfigMapRef != "" {
+			return r.reconcileConfigOnly(ctx, &dep)
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -180,11 +188,116 @@ func (r *McuDeploymentReconciler) phasePulling(ctx context.Context, dep *v1alpha
 	return ctrl.Result{Requeue: true}, nil
 }
 
+// pushConfigIfNeeded compare le McuConfigMap avec le NVS du device et pousse si divergent.
+// Sémantique merge-on-key : seules les clés citées dans Data sont vérifiées/écrites.
+// Retourne true si une mise à jour a été poussée.
+func (r *McuDeploymentReconciler) pushConfigIfNeeded(ctx context.Context, cli *agent.Client, dep *v1alpha1.McuDeployment) (bool, error) {
+	var cm v1alpha1.McuConfigMap
+	if err := r.Get(ctx, client.ObjectKey{Name: dep.Spec.ConfigMapRef, Namespace: dep.Namespace}, &cm); err != nil {
+		return false, fmt.Errorf("McuConfigMap %q: %w", dep.Spec.ConfigMapRef, err)
+	}
+
+	// Validation limites NVS agent (§4a contrat).
+	for k, v := range cm.Data {
+		if len(k) > 15 {
+			return false, fmt.Errorf("clé %q dépasse 15 caractères (limite NVS §4a)", k)
+		}
+		if len(v) > 63 {
+			return false, fmt.Errorf("valeur de %q dépasse 63 caractères (limite NVS §4a)", k)
+		}
+	}
+
+	current, err := cli.GetConfig()
+	if err != nil {
+		return false, fmt.Errorf("GET /config: %w", err)
+	}
+
+	needsPush := false
+	for k, v := range cm.Data {
+		if current.NVS[k] != v {
+			needsPush = true
+			break
+		}
+	}
+	if !needsPush {
+		return false, nil
+	}
+
+	if err := cli.PostConfig(cm.Data); err != nil {
+		return false, fmt.Errorf("POST /config: %w", err)
+	}
+	log.FromContext(ctx).Info("config poussée vers le device", "configMapRef", dep.Spec.ConfigMapRef)
+	return true, nil
+}
+
+// reconcileConfigOnly traite les mises à jour config sur un McuDeployment en phase Deployed.
+// Appelé quand le McuConfigMap référencé change (§7a contrat).
+// Pousse la config et reboot le device si le NVS diverge.
+func (r *McuDeploymentReconciler) reconcileConfigOnly(ctx context.Context, dep *v1alpha1.McuDeployment) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	_, cli, err := r.nodeClient(ctx, dep)
+	if err != nil {
+		// Device peut être temporairement offline — on réessaie.
+		logger.Error(err, "nodeClient unavailable, retry dans 30s")
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	}
+
+	pushed, err := r.pushConfigIfNeeded(ctx, cli, dep)
+	if err != nil {
+		logger.Error(err, "pushConfigIfNeeded échoué")
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	}
+
+	if pushed {
+		if err := cli.PostReboot(); err != nil {
+			logger.Error(err, "POST /reboot échoué après config update")
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		}
+		logger.Info("config mise à jour + reboot", "configMapRef", dep.Spec.ConfigMapRef)
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// configMapToDeployments mappe un McuConfigMap vers les McuDeployment qui le référencent.
+// Déclenche la réconciliation config-only sur les Deployed (§7a contrat).
+func (r *McuDeploymentReconciler) configMapToDeployments(ctx context.Context, obj client.Object) []reconcile.Request {
+	cm, ok := obj.(*v1alpha1.McuConfigMap)
+	if !ok {
+		return nil
+	}
+	var list v1alpha1.McuDeploymentList
+	if err := r.List(ctx, &list, client.InNamespace(cm.Namespace)); err != nil {
+		return nil
+	}
+	var reqs []reconcile.Request
+	for _, dep := range list.Items {
+		if dep.Spec.ConfigMapRef == cm.Name {
+			reqs = append(reqs, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      dep.Name,
+					Namespace: dep.Namespace,
+				},
+			})
+		}
+	}
+	return reqs
+}
+
 // phasePreparing : POST /ota/prepare avec idempotence (§6).
 func (r *McuDeploymentReconciler) phasePreparing(ctx context.Context, dep *v1alpha1.McuDeployment) (ctrl.Result, error) {
 	node, cli, err := r.nodeClient(ctx, dep)
 	if err != nil {
 		return ctrl.Result{}, err
+	}
+
+	// Pousser la config AVANT l'OTA (§6 contrat — POST /config d'abord, OTA ensuite).
+	if dep.Spec.ConfigMapRef != "" {
+		if _, err := r.pushConfigIfNeeded(ctx, cli, dep); err != nil {
+			log.FromContext(ctx).Error(err, "push config avant OTA échoué")
+			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+		}
 	}
 
 	// Idempotence §6 : lire staged pour décider où reprendre après un crash Core.
@@ -446,5 +559,6 @@ func (r *McuDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.McuDeployment{}).
 		Watches(&v1alpha1.McuNode{}, handler.EnqueueRequestsFromMapFunc(r.nodeToDeployments)).
+		Watches(&v1alpha1.McuConfigMap{}, handler.EnqueueRequestsFromMapFunc(r.configMapToDeployments)).
 		Complete(r)
 }

@@ -79,6 +79,66 @@ func (in *McuNodeStatus) DeepCopyInto(out *McuNodeStatus) {
 	}
 }
 
+// McuConfigMap
+
+func (in *McuConfigMap) DeepCopyInto(out *McuConfigMap) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	if in.Data != nil {
+		in, out := &in.Data, &out.Data
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+}
+
+func (in *McuConfigMap) DeepCopy() *McuConfigMap {
+	if in == nil {
+		return nil
+	}
+	out := new(McuConfigMap)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *McuConfigMap) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+
+func (in *McuConfigMapList) DeepCopyInto(out *McuConfigMapList) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
+	if in.Items != nil {
+		in, out := &in.Items, &out.Items
+		*out = make([]McuConfigMap, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+}
+
+func (in *McuConfigMapList) DeepCopy() *McuConfigMapList {
+	if in == nil {
+		return nil
+	}
+	out := new(McuConfigMapList)
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *McuConfigMapList) DeepCopyObject() runtime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+
 // McuDeployment
 
 func (in *McuDeployment) DeepCopyInto(out *McuDeployment) {

@@ -5,7 +5,7 @@ metadata:
 rules:
   # CRDs Embewi
   - apiGroups: ["embewi.io"]
-    resources: ["mcunodes", "mcudeployments"]
+    resources: ["mcunodes", "mcudeployments", "mcuconfigmaps"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["embewi.io"]
     resources: ["mcunodes/status", "mcudeployments/status"]

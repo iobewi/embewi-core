@@ -147,6 +147,59 @@ func (c *Client) OTAWrite(deploymentID, digest string, size int64, firmware io.R
 	return nil
 }
 
+// ConfigResponse correspond au GET /v1alpha1/config (contrat §4).
+type ConfigResponse struct {
+	Generation       int               `json:"generation"`
+	ActiveGeneration int               `json:"active_generation"`
+	Active           map[string]string `json:"active"`
+	NVS              map[string]string `json:"nvs"`
+}
+
+func (c *Client) GetConfig() (*ConfigResponse, error) {
+	resp, err := c.do(http.MethodGet, "/config", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET /config → %d", resp.StatusCode)
+	}
+	var cfg ConfigResponse
+	return &cfg, json.NewDecoder(resp.Body).Decode(&cfg)
+}
+
+// PostConfig pousse un jeu de clés/valeurs vers le NVS de l'agent (merge-on-key, §4a).
+func (c *Client) PostConfig(data map[string]string) error {
+	body, _ := json.Marshal(map[string]interface{}{"data": data})
+	resp, err := c.do(http.MethodPost, "/config", bytes.NewReader(body),
+		map[string]string{"Content-Type": "application/json"})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("POST /config → %d: %s", resp.StatusCode, raw)
+	}
+	return nil
+}
+
+// PostReboot déclenche un reboot contrôlé (§4 contrat).
+// À utiliser après POST /config sans cycle OTA pour appliquer la config.
+func (c *Client) PostReboot() error {
+	body, _ := json.Marshal(map[string]interface{}{})
+	resp, err := c.do(http.MethodPost, "/reboot", bytes.NewReader(body),
+		map[string]string{"Content-Type": "application/json"})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("POST /reboot → %d", resp.StatusCode)
+	}
+	return nil
+}
+
 type ActivateRequest struct {
 	DeploymentID string `json:"deployment_id"`
 	Reboot       bool   `json:"reboot"`
