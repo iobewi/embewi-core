@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
 	corev1 "k8s.io/api/core/v1"
 	"github.com/embewi/core/api/v1alpha1"
 	"github.com/embewi/core/internal/metrics"
@@ -23,6 +24,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+// wsUpgrader accepte les connexions WebSocket entrantes des agents ESP.
+// CheckOrigin est permissif : les devices ESP n'envoient pas d'en-tête Origin.
+var wsUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
 
 // HeartbeatPayload correspond au corps POST /v1alpha1/heartbeat (contrat §5).
 // Champs requis : node_id, ip, ts, state, ota_validated, config_generation.
@@ -259,6 +266,12 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
+	// WebSocket upgrade : l'agent ouvre une connexion WS cliente en sortant (contrat §5).
+	if websocket.IsWebSocketUpgrade(r) {
+		s.handleLogWS(w, r)
+		return
+	}
+	// HTTP POST : fallback pour les événements OTA/lifecycle critiques.
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -267,19 +280,71 @@ func (s *Server) handleLog(w http.ResponseWriter, r *http.Request) {
 
 	var entry LogPayload
 	if err := json.Unmarshal(body, &entry); err != nil {
-		w.WriteHeader(http.StatusOK) // on absorbe les entrées malformées
+		w.WriteHeader(http.StatusOK) // absorbe les entrées malformées
 		return
 	}
+	s.logEntry(r.Context(), entry)
+	w.WriteHeader(http.StatusOK)
+}
 
-	logger := log.FromContext(r.Context())
+// handleLogWS gère le flux de logs WebSocket émis par l'agent (contrat §5).
+// L'agent ouvre la connexion en sortant (outbound) — le Core est serveur.
+// Auth différée sur le premier frame : le champ "node" identifie le device,
+// le Bearer header est alors validé via le Secret référencé dans McuNodeSpec.TokenRef.
+// Garantie best-effort : pas de replay sur reconnexion.
+func (s *Server) handleLogWS(w http.ResponseWriter, r *http.Request) {
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		// Upgrade échoué — réponse HTTP déjà envoyée par gorilla.
+		return
+	}
+	defer conn.Close()
+
+	ctx := r.Context()
+	logger := log.FromContext(ctx)
+	authenticated := false
+
+	for {
+		_, raw, err := conn.ReadMessage()
+		if err != nil {
+			// Déconnexion normale (EOF, close frame) — best-effort, pas d'erreur.
+			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) &&
+				!websocket.IsUnexpectedCloseError(err) {
+				logger.Error(err, "WS logs : lecture frame échouée")
+			}
+			return
+		}
+
+		var entry LogPayload
+		if json.Unmarshal(raw, &entry) != nil {
+			continue // frame malformée — best-effort
+		}
+
+		// Auth différée sur le premier frame : node_id connu → validation Bearer.
+		if !authenticated {
+			node, err := s.findNode(ctx, entry.Node)
+			if err != nil || !s.validateToken(ctx, r, node) {
+				_ = conn.WriteMessage(websocket.CloseMessage,
+					websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "unauthorized"))
+				return
+			}
+			authenticated = true
+			logger.Info("WS logs : connexion authentifiée", "node", entry.Node)
+		}
+
+		s.logEntry(ctx, entry)
+	}
+}
+
+// logEntry écrit un LogPayload dans le logger structuré.
+func (s *Server) logEntry(ctx context.Context, entry LogPayload) {
+	logger := log.FromContext(ctx)
 	switch entry.Level {
 	case "fatal", "error":
 		logger.Error(nil, entry.Msg, "node", entry.Node, "workload", entry.Workload)
 	default:
 		logger.Info(entry.Msg, "node", entry.Node, "workload", entry.Workload, "level", entry.Level)
 	}
-
-	w.WriteHeader(http.StatusOK)
 }
 
 // findNode cherche un McuNode dont spec.nodeId == nodeID dans tous les namespaces.

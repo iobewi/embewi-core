@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/gorilla/websocket"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -242,5 +244,90 @@ func TestHandleHeartbeat_MethodNotAllowed(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("status : got %d, want 405", resp.StatusCode)
+	}
+}
+
+// TestHandleLogWS_AuthAndStream vérifie que le flux WS est authentifié sur le premier
+// frame et que les entrées de log sont acceptées après auth.
+func TestHandleLogWS_AuthAndStream(t *testing.T) {
+	scheme := testScheme(t)
+	node := newNode("ws-node", "ws-node-id")
+	secret := tokenSecret("ws-node-id", "ws-token")
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node, secret).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	srv := heartbeat.New(":0", fc)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	// Convertir l'URL http → ws.
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/v1alpha1/logs"
+	header := http.Header{"Authorization": {"Bearer ws-token"}}
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		t.Fatalf("WS dial : %v (HTTP %v)", err, resp)
+	}
+	defer conn.Close()
+
+	// Premier frame : authentifie + logue.
+	frame, _ := json.Marshal(heartbeat.LogPayload{
+		TS: 1719392051, Node: "ws-node-id", Workload: "test-wl", Level: "info", Msg: "hello ws",
+	})
+	if err := conn.WriteMessage(websocket.TextMessage, frame); err != nil {
+		t.Fatalf("WriteMessage : %v", err)
+	}
+
+	// Second frame : déjà authentifié.
+	frame2, _ := json.Marshal(heartbeat.LogPayload{
+		TS: 1719392052, Node: "ws-node-id", Workload: "test-wl", Level: "error", Msg: "oops",
+	})
+	if err := conn.WriteMessage(websocket.TextMessage, frame2); err != nil {
+		t.Fatalf("WriteMessage 2 : %v", err)
+	}
+
+	// Fermeture propre côté client.
+	_ = conn.WriteMessage(websocket.CloseMessage,
+		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+}
+
+// TestHandleLogWS_InvalidToken vérifie que la connexion est coupée si le token est invalide.
+func TestHandleLogWS_InvalidToken(t *testing.T) {
+	scheme := testScheme(t)
+	node := newNode("ws-auth-node", "ws-auth-id")
+	secret := tokenSecret("ws-auth-id", "correct-ws-token")
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node, secret).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	srv := heartbeat.New(":0", fc)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/v1alpha1/logs"
+	header := http.Header{"Authorization": {"Bearer wrong-token"}}
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		t.Fatalf("WS dial : %v", err)
+	}
+	defer conn.Close()
+
+	// Envoyer un frame — le serveur doit fermer avec 1008 (Policy Violation).
+	frame, _ := json.Marshal(heartbeat.LogPayload{Node: "ws-auth-id", Level: "info", Msg: "test"})
+	_ = conn.WriteMessage(websocket.TextMessage, frame)
+
+	// Lire la réponse — doit être un close frame.
+	_, _, err = conn.ReadMessage()
+	if err == nil {
+		t.Error("attendu une fermeture WS, connexion encore ouverte")
+		return
+	}
+	ce, ok := err.(*websocket.CloseError)
+	if !ok || ce.Code != websocket.ClosePolicyViolation {
+		t.Errorf("close code : got %v, want 1008 ClosePolicyViolation", err)
 	}
 }
