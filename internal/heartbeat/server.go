@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/embewi/core/api/v1alpha1"
+	"github.com/embewi/core/internal/metrics"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -169,6 +170,21 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	if err := s.client.Status().Patch(r.Context(), node, patch); err != nil {
 		logger.Error(err, "patch McuNode status failed")
 	}
+
+	// Métriques §8b : mise à jour des gauges Prometheus après chaque heartbeat valide.
+	metrics.UpdateFromHeartbeat(metrics.HeartbeatData{
+		NodeID:           hb.NodeID,
+		Workload:         hb.DeploymentID,
+		Chip:             node.Status.Chip,
+		HeapFree:         hb.HeapFree,
+		RSSI:             hb.RSSI,
+		UptimeMs:         hb.UptimeMs,
+		TempCelsius:      hb.TempCelsius,
+		TaskHwmMin:       hb.TaskHwmMin,
+		ConfigGeneration: hb.ConfigGeneration,
+		TS:               hb.TS,
+		OtaValidated:     hb.OtaValidated,
+	})
 
 	w.WriteHeader(http.StatusOK)
 }

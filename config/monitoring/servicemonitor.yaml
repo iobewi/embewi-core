@@ -1,0 +1,13 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: embewi-core
+  namespace: embewi
+spec:
+  selector:
+    matchLabels:
+      app: embewi-core
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
