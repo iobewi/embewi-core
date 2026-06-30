@@ -7,14 +7,14 @@ Déclenché à chaque modification d'un McuNode (`internal/controller/mcunode_co
 ### Pilotage de `ready`
 
 ```text
-wantReady = state=="running" && otaValidated && time.Since(lastHeartbeat) ≤ 30s
+wantReady = state=="running" && otaValidated && time.Since(lastHeartbeat) ≤ 10s
 ```
 
-Si `wantReady != status.ready` → patch status. La condition est réévaluée toutes
-les **30 s** via `RequeueAfter`.
+Si `wantReady` ou `state` change → patch status. La condition est réévaluée toutes
+les **10 s** via `RequeueAfter` (= `HeartbeatTimeout`).
 
 Cas de passage à `ready=false` :
-- Heartbeat silencieux depuis > 30 s
+- Heartbeat silencieux depuis > 10 s → `state` basculé en `offline`
 - `state` ≠ `running` (pending_verify, degraded, rollback, failed)
 - `otaValidated == false`
 
@@ -34,7 +34,7 @@ metadata:
 spec:
   ports:
     - name: app
-      port: <status.appPort>    # défaut 8080
+      port: <status.appPort>    # défaut 8080, peuplé depuis GET /info
       protocol: TCP
   # Pas de selector — l'EndpointSlice est géré manuellement
 ```
@@ -51,7 +51,7 @@ metadata:
     embewi.io/managed-by: embewi-controller
 addressType: IPv4
 endpoints:
-  - addresses: ["192.168.10.50"]    # status.ip
+  - addresses: ["192.168.10.50"]    # status.ip — source : heartbeat.ip, jamais RemoteAddr
     conditions:
       ready: true                   # piloté par status.ready
 ports:
@@ -62,6 +62,9 @@ ports:
 
 `ready` suit `McuNode.Status.Ready` — jamais statique. C'est le seul signal
 réseau que le cluster utilise pour savoir si l'ESP est opérationnel.
+
+Le McuNode est défini comme **owner** du Service et de l'EndpointSlice via
+`controllerutil.SetControllerReference` — suppression en cascade automatique.
 
 ---
 
@@ -98,54 +101,68 @@ En cas d'erreur registre → requeue dans **30 s**.
 
 ### Phase Preparing
 
-1. Lit `GET /v1alpha1/info` pour idempotence (§6 contrat) :
+1. Si `spec.configMapRef` renseigné : pousse la config **avant** l'OTA (§6 contrat).
+   En cas d'erreur permanente (clé > 15 chars, CM introuvable) → `Failed/ConfigInvalid`.
+
+2. Lit `GET /v1alpha1/info` pour idempotence (§6 contrat). Persiste aussi
+   `chip`, `idfVersion`, `flashSize`, `ramSize`, `appPort` dans `McuNode.Status` :
 
 | `staged.state` | `staged.deploymentId` | Décision |
 |----------------|-----------------------|----------|
 | `activating` | == current | → skip → **Confirming** |
-| `written` | == current et digest match | → skip → **Activating** |
+| `written` + digest match | == current | → skip → **Activating** |
 | autre | — | → envoyer prepare |
 
-2. Envoie `POST /v1alpha1/ota/prepare` :
+3. Envoie `POST /v1alpha1/ota/prepare` :
 
 ```json
 {
-  "deployment_id": "<dep.UID>",
-  "digest":        "sha256:...",
-  "size":          983040,
-  "chip":          "esp32c3",
-  "idf_version":   "v6.0.0",
+  "deployment_id":    "<dep.UID>",
+  "artifact":         "registry.local/embewi/wheel-controller:v1.1.0",
+  "digest":           "sha256:...",
+  "size":             983040,
+  "chip":             "esp32c3",
+  "idf_version":      "v6.0.0",
   "partition_layout": "embewi-ab-v1"
 }
 ```
 
-3. Si `accepted: false` → **Failed** avec le `reason` de l'agent.
-4. Si `accepted: true` → **Writing**.
+4. Si `accepted: false` → **Failed** + Event K8s (voir tableau §4b).
+5. Si `accepted: true` → **Writing**.
 
 En cas d'erreur réseau → requeue dans **15 s**.
 
 ### Phase Writing
 
 1. Ouvre un stream blob depuis le registre OCI (`GET /v2/<repo>/blobs/<digest>`).
-2. Pipe le stream directement vers `PUT /v1alpha1/ota/write` avec les headers :
+2. Pipe le stream vers `PUT /v1alpha1/ota/write` avec les headers :
 
 ```
-Content-Type: application/octet-stream
-Content-Length: <size>
+Content-Type:            application/octet-stream
+Content-Length:          <size>
+Content-Range:           bytes 0-<size-1>/<size>
 X-Embewi-Deployment-Id: <deploymentId>
-X-Embewi-Digest: sha256:...
-Authorization: Bearer <token>
+X-Embewi-Digest:         sha256:...
+Authorization:           Bearer <token>
 ```
 
 3. Vérifie que l'agent répond `{ "status": "written" }`.
 4. Passe en **Activating**.
 
-En cas d'erreur → requeue dans **30 s** (le slot n'est pas corrompu — la prochaine
-Preparing détectera `staged.state`).
+`Content-Range: bytes 0-{n-1}/{n}` signale une nouvelle session (§4 contrat).
+La reprise intra-session (start > 0) est supportée par l'agent mais pas encore
+implémentée côté Core (le retry repart de l'octet 0).
+
+En cas d'erreur → requeue dans **30 s** (le slot inactif n'est pas corrompu —
+la prochaine Preparing détectera `staged.state`).
 
 ### Phase Activating
 
-Envoie `POST /v1alpha1/ota/activate` :
+Vérifie d'abord l'idempotence via `GET /v1alpha1/info` :
+
+- Si `staged.state == "activating"` ET bon `deploymentId` → activate déjà envoyé → skip directement **Confirming**
+- Si `state == "pending_verify"` → device en cours de self-check → skip directement **Confirming**
+- Sinon → envoie `POST /v1alpha1/ota/activate` :
 
 ```json
 { "deployment_id": "<deploymentId>", "reboot": true }
@@ -158,6 +175,7 @@ En cas d'erreur → requeue dans **15 s**.
 ### Phase Confirming
 
 Attend la confirmation via heartbeat. Réévalué toutes les **10 s**.
+Déclenché aussi immédiatement à chaque mise à jour du McuNode (watch).
 
 Conditions de passage en **Deployed** :
 
@@ -169,7 +187,7 @@ node.status.deploymentId == dep.status.deploymentId
 
 Conditions de passage en **Failed** :
 
-- `node.status.state ∈ { "failed", "rollback" }` → `DeviceRollback`
+- `node.status.state ∈ { "failed", "rollback", "degraded" }` → `DeviceRollback`
 - Annotation `embewi.io/confirming-since` dépasse **2 minutes** → `ConfirmTimeout`
 
 **Timeout négatif horodaté :** au premier passage en Confirming, l'annotation
@@ -177,7 +195,58 @@ Conditions de passage en **Failed** :
 annotation persiste entre les cycles de réconciliation — le timer ne repart pas
 à zéro si le Core redémarre.
 
-### Phase Failed / Deployed
+### Phase Deployed
 
-Terminales — plus de réconciliation. Pour relancer un déploiement échoué, créer
-un nouvel objet McuDeployment.
+La réconciliation **n'est pas terminale** en phase Deployed. Le reconciler surveille :
+
+1. **`Available/HeartbeatTimeout`** : si le McuNode perd ses heartbeats (> 10 s),
+   `Available` passe à `False/HeartbeatTimeout`. Reprend à `WorkloadReady` dès
+   que les heartbeats reprennent. Déclenché par le watch McuNode.
+
+2. **Config drift** (si `spec.configMapRef` renseigné) : si le McuConfigMap change,
+   la config est re-poussée et le device reboot. Déclenché par le watch McuConfigMap.
+
+### Phase Failed
+
+Terminale. Pour relancer un déploiement échoué, créer un nouvel objet McuDeployment.
+
+### Condition Ready (synthétique)
+
+```text
+Ready=True  ← Progressing=False ET Available=True
+Ready=False ← dans tous les autres cas
+```
+
+```bash
+# Attendre la fin d'un déploiement :
+kubectl wait mcudeployment/wheel-left --for=condition=Ready --timeout=5m
+```
+
+---
+
+## Serveur heartbeat
+
+(`internal/heartbeat/server.go`) — écoute les flux sortants ESP → Core.
+
+### `POST /v1alpha1/heartbeat`
+
+Reçu toutes les 5 s par device. Met à jour `McuNode.Status` : IP, state,
+otaValidated, métriques temps réel, conditions Provisioned/Ready.
+
+Authentification : Bearer token validé par comparaison temps-constant contre le
+Secret référencé dans `McuNodeSpec.TokenRef`.
+
+### `wss://.../v1alpha1/logs` (WebSocket)
+
+L'agent ouvre une connexion WS **cliente** (outbound) vers le Core. Le Core
+est serveur.
+
+- Auth différée sur le premier frame : `"node"` identifie le device, le Bearer
+  header est validé contre `spec.tokenRef`.
+- Si token invalide : close frame `1008 ClosePolicyViolation`.
+- Best-effort : pas de replay sur reconnexion.
+
+### `POST /v1alpha1/logs`
+
+Fallback HTTP pour les événements OTA/lifecycle critiques. Même path que le WS —
+le serveur détecte l'upgrade automatiquement.

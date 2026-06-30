@@ -1,6 +1,9 @@
-# API agent (Core → ESP)
+# API agent
 
-> API inbound de l'agent ESP32, telle qu'appelée par le Core.
+Ce document couvre les deux sens de communication entre Core et agent :
+- **Core → ESP** (appels HTTP sortants du Core vers l'agent)
+- **ESP → Core** (flux entrants reçus par le serveur heartbeat)
+
 > Le contrat de référence reste `embewi-contract-v2.md`.
 
 Version protocole : `v1alpha1`
@@ -265,3 +268,74 @@ Séquence complète de rotation :
 | 401 | Token absent ou invalide |
 | 413 | Body trop grand |
 | 500 | Erreur interne ESP (NVS, OTA) |
+
+---
+
+# Flux sortants ESP → Core
+
+## `POST /v1alpha1/heartbeat`
+
+Émis par l'agent toutes les **5 s**. Met à jour `McuNode.Status`.
+
+```json
+{
+  "node_id":          "esp32-motor-left",
+  "ip":               "192.168.10.50",
+  "ts":               1710000000,
+  "state":            "running",
+  "deployment_id":    "wheel-controller-1.1.0",
+  "firmware_digest":  "sha256:...",
+  "ota_validated":    true,
+  "uptime_ms":        120034,
+  "heap_free":        82344,
+  "rssi":             -61,
+  "config_generation": 2,
+  "temp_celsius":     41.2,
+  "task_hwm_min":     1536
+}
+```
+
+Champs requis : `node_id`, `ip`, `ts`, `state`, `ota_validated`, `config_generation`.
+
+Notes :
+- `ip` est la source de vérité pour `EndpointSlice.addresses` — l'IP TCP source n'est pas fiable.
+- `temp_celsius = -127.0` → capteur indisponible, valeur filtrée (ni stockée ni métrique).
+- `ts ≈ 0` → NTP pas encore synchronisé, pas d'alerte sur cette valeur seule.
+- Authentification : `Authorization: Bearer <token>` validé contre `spec.tokenRef`.
+
+## `wss://<ctrl_url>/v1alpha1/logs` (WebSocket)
+
+L'agent ouvre une connexion WS **cliente** (outbound) vers le Core. Le Core est
+serveur. Même adresse que `--heartbeat-address`.
+
+**Format par frame :**
+
+```json
+{
+  "ts":       1719392051,
+  "node":     "esp32-motor-left",
+  "workload": "wheel-controller",
+  "level":    "raw",
+  "msg":      "I (10352) embewi.ota: write OK 983040 octets slot=ota_1"
+}
+```
+
+| Champ | Description |
+|-------|-------------|
+| `level` | `raw` \| `info` \| `warn` \| `error` \| `fatal` |
+| `workload` | Identifiant de l'application embarquée |
+
+**Comportement Core :**
+
+- Upgrade HTTP → WebSocket automatique sur `/v1alpha1/logs`.
+- **Auth différée** sur le premier frame : `"node"` identifie le device, le
+  Bearer header est validé contre `McuNodeSpec.TokenRef`.
+- Token invalide → close frame `1008 ClosePolicyViolation`.
+- Best-effort : pas de replay sur reconnexion (§5 contrat).
+- Les logs `error`/`fatal` sont enregistrés au niveau `Error` du logger ; les
+  autres au niveau `Info`.
+
+## `POST /v1alpha1/logs`
+
+Fallback HTTP pour les événements OTA/lifecycle critiques. Même endpoint que le
+WebSocket — le serveur détecte l'upgrade automatiquement et route vers le bon handler.

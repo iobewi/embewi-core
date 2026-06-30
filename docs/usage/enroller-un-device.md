@@ -1,7 +1,7 @@
 # Enrôler un device
 
 Un device ESP32 devient un `McuNode` après trois étapes : provisioning via le
-portail captif, création de l'objet K8s, et enregistrement du token Bearer.
+portail captif, création du Secret token, et création de l'objet K8s.
 
 ---
 
@@ -16,16 +16,16 @@ sert un portail captif sur `http://192.168.4.1`.
 |-------|-------------|-------------|
 | `ssid` | Oui | SSID du réseau WiFi cible |
 | `pass` | Non | Mot de passe WiFi |
-| `ctrl_url` | Oui | URL du Core (`http://<IP-du-pod>:8080`) |
+| `ctrl_url` | Oui | URL du Core (`https://<IP-du-pod>:8080`) |
 | `ip` | Non¹ | IP statique du device (vide = DHCP) |
 | `mask` | Non¹ | Masque réseau |
-| `gw` | Non¹ | Passerelle — pré-remplie avec l'IP du Core |
+| `gw` | Non¹ | Passerelle |
 | `token` | Non | Token Bearer — généré aléatoirement si vide² |
 
 > ¹ `ip`, `mask` et `gw` sont tous obligatoires ensemble si IP statique.
 >
 > ² Le token généré est affiché **une seule fois** dans la page de confirmation
-> — le noter immédiatement. C'est la seule occasion de le récupérer.
+> — le noter immédiatement.
 
 **Page de confirmation :**
 
@@ -44,27 +44,33 @@ heartbeats vers `ctrl_url`.
 
 ---
 
-## 2. Enregistrer le token dans le Secret K8s
+## 2. Créer le Secret token du device
 
-Le Core charge les tokens depuis un Secret Kubernetes. La clé est le `nodeId`
-du device, la valeur est le token hex encodé en base64.
-
-**Création du Secret (premier device) :**
+Chaque device possède son **propre Secret** Kubernetes portant son token Bearer.
+Le Secret est référencé dans `McuNodeSpec.TokenRef` (§1 contrat).
 
 ```bash
-kubectl create secret generic embewi-tokens \
-  --from-literal=esp32-motor-left="a3f7c1b2e8d09441f6bc3e7a2c504d8f"
+# Créer le Secret dédié à ce device :
+kubectl create secret generic esp32-motor-left-token \
+  --from-literal=token="a3f7c1b2e8d09441f6bc3e7a2c504d8f" \
+  --namespace=default
 ```
 
-**Ajout d'un device à un Secret existant :**
+Structure attendue du Secret :
 
-```bash
-kubectl patch secret embewi-tokens \
-  --type=json \
-  -p='[{"op":"add","path":"/data/esp32-motor-left","value":"'$(echo -n "a3f7c1b2e8d09441f6bc3e7a2c504d8f" | base64)'"}]'
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: esp32-motor-left-token
+  namespace: default
+type: Opaque
+stringData:
+  token: "a3f7c1b2e8d09441f6bc3e7a2c504d8f"   # token affiché au portail captif
 ```
 
-> Le Secret doit être dans le **même namespace** que les McuDeployment.
+> Le Secret doit être dans le **même namespace** que le McuNode (ou le namespace
+> spécifié dans `spec.tokenRef.namespace`).
 
 ---
 
@@ -82,6 +88,9 @@ metadata:
     side: left
 spec:
   nodeId: esp32-motor-left
+  tokenRef:
+    name: esp32-motor-left-token   # Secret créé à l'étape 2
+    namespace: default
 EOF
 ```
 
@@ -96,8 +105,8 @@ Dès que le device envoie son premier heartbeat, le status se peuple :
 
 ```bash
 kubectl get mcunode esp32-motor-left
-# NAME               STATE     READY   AGE
-# esp32-motor-left   running   true    30s
+# NAME               STATUS    AGE   VERSION
+# esp32-motor-left   running   30s   1.0.0
 
 kubectl describe mcunode esp32-motor-left
 # Status:
@@ -105,9 +114,35 @@ kubectl describe mcunode esp32-motor-left
 #   State:           running
 #   Last Heartbeat:  2026-06-29T10:00:03Z
 #   Ready:           true
+#   Conditions:
+#     Type:    Provisioned  Status: True   Reason: ProvisioningComplete
+#     Type:    Ready        Status: True   Reason: HeartbeatOK
 ```
 
-Si `Ready` reste `false` après 30 secondes :
-- Vérifier que `ctrl_url` pointe bien vers le pod Core (`kubectl get svc`)
-- Vérifier que `spec.nodeId` correspond à `EMBEWI_NODE_ID` du firmware
+Si `Ready` reste `false` après 15 secondes :
+- Vérifier que `ctrl_url` pointe vers le pod Core (`kubectl get svc -n default`)
+- Vérifier que `spec.nodeId` correspond exactement à `EMBEWI_NODE_ID` du firmware
+- Vérifier que le Secret `esp32-motor-left-token` contient bien la clé `token`
 - Consulter les logs du Core : `kubectl logs deployment/embewi-core`
+
+---
+
+## Rotation du token
+
+Pour changer le token Bearer d'un device sans interruption de service :
+
+```bash
+# 1. Générer un nouveau token
+NEW_TOKEN=$(openssl rand -hex 32)
+
+# 2. Mettre à jour le Secret K8s
+kubectl patch secret esp32-motor-left-token \
+  --type=json \
+  -p="[{\"op\":\"replace\",\"path\":\"/data/token\",\"value\":\"$(echo -n $NEW_TOKEN | base64)\"}]"
+
+# 3. Le Core appelle POST /token avec l'ancien token pour notifier le device
+#    (via kubectl exec ou l'API embewi-core — à implémenter selon vos besoins)
+```
+
+> La rotation atomique est garantie côté agent : le device commite le nouveau
+> token en NVS avant de répondre — pas de fenêtre sans authentification.
