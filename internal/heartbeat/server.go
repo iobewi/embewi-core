@@ -58,14 +58,19 @@ func New(addr string, c client.Client) *Server {
 	return &Server{addr: addr, client: c}
 }
 
-func (s *Server) Start(ctx context.Context) error {
+// Handler retourne le http.Handler du serveur heartbeat.
+// Exposé pour les tests : httptest.NewServer(srv.Handler()).
+func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1alpha1/heartbeat", s.handleHeartbeat)
 	mux.HandleFunc("/v1alpha1/logs", s.handleLog)
+	return mux
+}
 
+func (s *Server) Start(ctx context.Context) error {
 	srv := &http.Server{
 		Addr:         s.addr,
-		Handler:      mux,
+		Handler:      s.Handler(),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 5 * time.Second,
 	}
