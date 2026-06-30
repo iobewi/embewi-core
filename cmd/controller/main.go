@@ -86,6 +86,7 @@ func main() {
 		Scheme:      mgr.GetScheme(),
 		OCI:         oci.New(ociOpts...),
 		TokenSecret: tokenSecret,
+		Recorder:    mgr.GetEventRecorderFor("embewi-core"),
 	}).SetupWithManager(mgr); err != nil {
 		logger.Error(err, "McuDeploymentReconciler setup failed")
 		os.Exit(1)

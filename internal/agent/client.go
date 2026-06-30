@@ -120,32 +120,62 @@ func (c *Client) OTAPrepare(req PrepareRequest) (*PrepareResponse, error) {
 	return &out, json.NewDecoder(resp.Body).Decode(&out)
 }
 
+// OTAWriteError représente un refus métier de PUT /ota/write (§4b contrat).
+// Permet au controller d'émettre le bon Event K8s sans parser des strings d'erreur.
+type OTAWriteError struct {
+	// Status : code agent (digest_mismatch, write_failed, ota_begin_failed, range_mismatch).
+	Status     string
+	// HTTPStatus : code HTTP si l'erreur vient d'un 4xx/5xx ; 0 pour une erreur métier (HTTP 200).
+	HTTPStatus int
+}
+
+func (e *OTAWriteError) Error() string {
+	if e.HTTPStatus != 0 {
+		return fmt.Sprintf("PUT /ota/write HTTP %d: %s", e.HTTPStatus, e.Status)
+	}
+	return "PUT /ota/write: " + e.Status
+}
+
 // OTAWrite streame le binaire vers PUT /v1alpha1/ota/write.
+// Retourne *OTAWriteError pour les échecs métier (§4b) afin que le controller
+// puisse émettre le bon Event K8s.
 func (c *Client) OTAWrite(deploymentID, digest string, size int64, firmware io.Reader) error {
 	resp, err := c.do(http.MethodPut, "/ota/write", firmware, map[string]string{
-		"Content-Type":          "application/octet-stream",
-		"Content-Length":        fmt.Sprintf("%d", size),
+		"Content-Type":           "application/octet-stream",
+		"Content-Length":         fmt.Sprintf("%d", size),
 		"X-Embewi-Deployment-Id": deploymentID,
-		"X-Embewi-Digest":       digest,
+		"X-Embewi-Digest":        digest,
 	})
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var result struct {
+			Status string `json:"status"`
+			Error  string `json:"error"`
+		}
+		if err := json.Unmarshal(raw, &result); err != nil {
+			return err
+		}
+		if result.Status == "written" {
+			return nil
+		}
+		status := result.Status
+		if status == "" {
+			status = result.Error
+		}
+		return &OTAWriteError{Status: status}
+	case http.StatusRequestedRangeNotSatisfiable: // 416 — range_mismatch, resync attendu
+		return &OTAWriteError{Status: "range_mismatch", HTTPStatus: http.StatusRequestedRangeNotSatisfiable}
+	case http.StatusInternalServerError: // 500 — ota_begin_failed
+		return &OTAWriteError{Status: "ota_begin_failed", HTTPStatus: http.StatusInternalServerError}
+	default:
 		return fmt.Errorf("PUT /ota/write → %d: %s", resp.StatusCode, raw)
 	}
-	var result struct {
-		Status string `json:"status"`
-	}
-	if err := json.Unmarshal(raw, &result); err != nil {
-		return err
-	}
-	if result.Status != "written" {
-		return fmt.Errorf("PUT /ota/write status: %s", result.Status)
-	}
-	return nil
 }
 
 // ConfigResponse correspond au GET /v1alpha1/config (contrat §4).

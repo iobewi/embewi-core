@@ -2,16 +2,18 @@ package controller
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -45,8 +47,9 @@ const annotationConfirmingSince = "embewi.io/confirming-since"
 type McuDeploymentReconciler struct {
 	client.Client
 	Scheme      *runtime.Scheme
-	OCI         *oci.Client // client OCI pour pull firmware
-	TokenSecret string      // nom du Secret K8s contenant les tokens Bearer (défaut : "embewi-tokens")
+	OCI         *oci.Client          // client OCI pour pull firmware
+	TokenSecret string               // nom du Secret K8s contenant les tokens Bearer (défaut : "embewi-tokens")
+	Recorder    record.EventRecorder // émet des Events K8s (§4b contrat)
 }
 
 func (r *McuDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -54,7 +57,7 @@ func (r *McuDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	var dep v1alpha1.McuDeployment
 	if err := r.Get(ctx, req.NamespacedName, &dep); err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
@@ -328,6 +331,19 @@ func (r *McuDeploymentReconciler) phasePreparing(ctx context.Context, dep *v1alp
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
 	}
 	if !resp.Accepted {
+		// Mapper les codes §4b → Events K8s stables.
+		eventReason := map[string]string{
+			"chip_mismatch":    "OTARejectedChip",
+			"layout_mismatch":  "OTARejectedLayout",
+			"idf_incompatible": "OTARejectedIdf",
+			"size_too_large":   "OTARejectedSize",
+			"busy":             "OTABusy",
+		}[resp.Reason]
+		if eventReason == "" {
+			eventReason = "OTARejected"
+		}
+		r.Recorder.Event(dep, corev1.EventTypeWarning, eventReason,
+			fmt.Sprintf("prepare refusé par le device: %s", resp.Reason))
 		return r.fail(ctx, dep, resp.Reason, fmt.Sprintf("prepare refusé: %s", resp.Reason))
 	}
 
@@ -350,10 +366,25 @@ func (r *McuDeploymentReconciler) phaseWriting(ctx context.Context, dep *v1alpha
 
 	if err := cli.OTAWrite(dep.Status.DeploymentID, dep.Status.Digest, dep.Status.Size, stream); err != nil {
 		log.FromContext(ctx).Error(err, "OTAWrite échoué")
+		// Mapper les codes §4b → Events K8s stables.
+		var writeErr *agent.OTAWriteError
+		if stderrors.As(err, &writeErr) {
+			switch writeErr.Status {
+			case "digest_mismatch":
+				r.Recorder.Event(dep, corev1.EventTypeWarning, "OTADigestMismatch", writeErr.Error())
+			case "write_failed":
+				r.Recorder.Event(dep, corev1.EventTypeWarning, "OTAWriteFailed", writeErr.Error())
+			case "ota_begin_failed":
+				r.Recorder.Event(dep, corev1.EventTypeWarning, "OTABeginFailed", writeErr.Error())
+			// range_mismatch (416) : resync attendu — pas d'event, on réessaie.
+			}
+		}
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, fmt.Errorf("OTAWrite: %w", err)
 	}
 
 	log.FromContext(ctx).Info("firmware écrit avec succès", "size", dep.Status.Size)
+	r.Recorder.Event(dep, corev1.EventTypeNormal, "OTAWritten",
+		fmt.Sprintf("firmware écrit sur le device (%d bytes)", dep.Status.Size))
 	return r.setPhase(ctx, dep, v1alpha1.PhaseActivating, dep.Status.BoundNode, "")
 }
 
