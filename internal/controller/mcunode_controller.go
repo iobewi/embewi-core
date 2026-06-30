@@ -79,11 +79,14 @@ func (r *McuNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			Message: "device jamais enrôlé",
 		})
 	} else if heartbeatExpired {
+		// Message sans time.Since() : valeur fixe pour que MergeFrom produise un diff vide
+		// une fois la condition posée, évitant un Status().Patch() toutes les 30 s sur les
+		// nodes offline.
 		apimeta.SetStatusCondition(&node.Status.Conditions, metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
 			Reason:  "HeartbeatTimeout",
-			Message: fmt.Sprintf("aucun heartbeat depuis %v", time.Since(node.Status.LastHeartbeat.Time).Round(time.Second)),
+			Message: fmt.Sprintf("aucun heartbeat depuis plus de %v", HeartbeatTimeout),
 		})
 	}
 

@@ -210,19 +210,24 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 			Message: fmt.Sprintf("heartbeat reçu, state=%s", hb.State),
 		})
 	} else {
+		// Heartbeat reçu mais device pas encore prêt (pending_verify, degraded…).
+		// Raison distincte de HeartbeatTimeout pour différencier device vivant vs silencieux.
 		apimeta.SetStatusCondition(&node.Status.Conditions, metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
-			Reason:  "HeartbeatOK",
-			Message: fmt.Sprintf("heartbeat reçu, state=%s (not ready)", hb.State),
+			Reason:  "DeviceNotReady",
+			Message: fmt.Sprintf("heartbeat reçu, state=%s (non prêt)", hb.State),
 		})
 	}
 
 	if err := s.client.Status().Patch(r.Context(), node, patch); err != nil {
 		logger.Error(err, "patch McuNode status failed")
+		// Métriques non mises à jour si le patch K8s échoue — évite la divergence K8s/Prometheus.
+		w.WriteHeader(http.StatusOK)
+		return
 	}
 
-	// Métriques §8b : mise à jour des gauges Prometheus après chaque heartbeat valide.
+	// Métriques §8b : mise à jour des gauges uniquement après patch K8s réussi.
 	metrics.UpdateFromHeartbeat(metrics.HeartbeatData{
 		NodeID:           hb.NodeID,
 		Workload:         hb.DeploymentID,

@@ -173,7 +173,7 @@ func (r *McuDeploymentReconciler) phasePulling(ctx context.Context, dep *v1alpha
 	meta, err := r.OCI.ResolveFirmware(ctx, dep.Spec.Firmware.Image)
 	if err != nil {
 		logger.Error(err, "résolution firmware OCI échouée", "image", dep.Spec.Firmware.Image)
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
 	patch := client.MergeFrom(dep.DeepCopy())
@@ -328,7 +328,8 @@ func (r *McuDeploymentReconciler) phasePreparing(ctx context.Context, dep *v1alp
 	// Idempotence §6 : lire staged pour décider où reprendre après un crash Core.
 	info, err := cli.GetInfo()
 	if err != nil {
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
+		log.FromContext(ctx).Error(err, "GET /info échoué (transitoire)")
+		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 	switch {
 	case info.Staged.State == "activating" && info.Staged.DeploymentID == dep.Status.DeploymentID:
@@ -350,7 +351,8 @@ func (r *McuDeploymentReconciler) phasePreparing(ctx context.Context, dep *v1alp
 		PartitionLayout: "embewi-ab-v1",
 	})
 	if err != nil {
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
+		log.FromContext(ctx).Error(err, "POST /ota/prepare échoué (transitoire)")
+		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 	if !resp.Accepted {
 		// Mapper les codes §4b → Events K8s stables.
@@ -382,7 +384,7 @@ func (r *McuDeploymentReconciler) phaseWriting(ctx context.Context, dep *v1alpha
 	stream, err := r.OCI.StreamBlob(ctx, dep.Spec.Firmware.Image, dep.Status.Digest)
 	if err != nil {
 		log.FromContext(ctx).Error(err, "stream blob OCI échoué", "digest", dep.Status.Digest)
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, fmt.Errorf("stream blob: %w", err)
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 	defer stream.Close()
 
@@ -401,7 +403,7 @@ func (r *McuDeploymentReconciler) phaseWriting(ctx context.Context, dep *v1alpha
 			// range_mismatch (416) : resync attendu — pas d'event, on réessaie.
 			}
 		}
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, fmt.Errorf("OTAWrite: %w", err)
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
 	log.FromContext(ctx).Info("firmware écrit avec succès", "size", dep.Status.Size)
@@ -422,14 +424,16 @@ func (r *McuDeploymentReconciler) phaseActivating(ctx context.Context, dep *v1al
 	// Ne pas envoyer un second OTAActivate dans ces cas.
 	info, err := cli.GetInfo()
 	if err != nil {
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
+		log.FromContext(ctx).Error(err, "GET /info avant activate échoué (transitoire)")
+		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 	alreadyActivated :=
 		(info.Staged.State == "activating" && info.Staged.DeploymentID == dep.Status.DeploymentID) ||
 			info.State == "pending_verify"
 	if !alreadyActivated {
 		if err := cli.OTAActivate(dep.Status.DeploymentID); err != nil {
-			return ctrl.Result{RequeueAfter: 15 * time.Second}, err
+			log.FromContext(ctx).Error(err, "POST /ota/activate échoué (transitoire)")
+			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 		}
 	}
 	return r.setPhase(ctx, dep, v1alpha1.PhaseConfirming, dep.Status.BoundNode, "")
@@ -442,7 +446,8 @@ func (r *McuDeploymentReconciler) phaseConfirming(ctx context.Context, dep *v1al
 
 	node, _, err := r.nodeClient(ctx, dep)
 	if err != nil {
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+		log.FromContext(ctx).Error(err, "nodeClient indisponible en Confirming (transitoire)")
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	// Confirmation reçue.
