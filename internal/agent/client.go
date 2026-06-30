@@ -91,6 +91,7 @@ func (c *Client) GetInfo() (*InfoResponse, error) {
 // PrepareRequest correspond au POST /v1alpha1/ota/prepare.
 type PrepareRequest struct {
 	DeploymentID    string `json:"deployment_id"`
+	Artifact        string `json:"artifact"`         // référence OCI complète (image:tag)
 	Digest          string `json:"digest"`
 	Size            int64  `json:"size"`
 	Chip            string `json:"chip"`
@@ -215,6 +216,26 @@ func (c *Client) OTAActivate(deploymentID string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("POST /ota/activate → %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// RotateToken envoie un nouveau token au device (§4 contrat — rotation sans coupure).
+// Protocole : POST /token avec oldToken en Authorization, newToken dans le corps.
+// Le device commite en NVS avant de répondre : atomique, pas de fenêtre sans auth.
+// Contrainte contrat : 8 ≤ len(newToken) ≤ 64.
+// Après un appel réussi, créer un nouveau Client avec newToken pour les appels suivants.
+func (c *Client) RotateToken(newToken string) error {
+	body, _ := json.Marshal(map[string]string{"token": newToken})
+	resp, err := c.do(http.MethodPost, "/token", bytes.NewReader(body),
+		map[string]string{"Content-Type": "application/json"})
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("POST /token → %d: %s", resp.StatusCode, raw)
 	}
 	return nil
 }

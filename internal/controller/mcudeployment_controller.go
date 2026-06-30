@@ -317,6 +317,7 @@ func (r *McuDeploymentReconciler) phasePreparing(ctx context.Context, dep *v1alp
 
 	resp, err := cli.OTAPrepare(agent.PrepareRequest{
 		DeploymentID:    dep.Status.DeploymentID,
+		Artifact:        dep.Spec.Firmware.Image,
 		Digest:          dep.Status.Digest,
 		Size:            dep.Status.Size,
 		Chip:            node.Status.Chip,
