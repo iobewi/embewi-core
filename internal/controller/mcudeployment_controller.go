@@ -457,8 +457,9 @@ func (r *McuDeploymentReconciler) phaseConfirming(ctx context.Context, dep *v1al
 		return r.setPhase(ctx, dep, v1alpha1.PhaseDeployed, node.Name, "déploiement confirmé par heartbeat")
 	}
 
-	// Rollback détecté — le device a rebooté sur l'ancienne image.
-	if node.Status.State == "failed" || node.Status.State == "rollback" {
+	// Rollback/degraded détectés — le device n'a pas validé le nouveau firmware.
+	switch node.Status.State {
+	case "failed", "rollback", "degraded":
 		return r.fail(ctx, dep, "DeviceRollback",
 			fmt.Sprintf("device en état %q après activation", node.Status.State))
 	}

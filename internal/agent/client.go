@@ -100,6 +100,24 @@ func (c *Client) GetInfo() (*InfoResponse, error) {
 	return &info, json.NewDecoder(resp.Body).Decode(&info)
 }
 
+// HealthResponse correspond au GET /v1alpha1/health (optionnel — §4 contrat).
+type HealthResponse struct {
+	Status string `json:"status"` // "ok" ou "degraded"
+}
+
+func (c *Client) GetHealth() (*HealthResponse, error) {
+	resp, err := c.do(http.MethodGet, "/health", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET /health → %d", resp.StatusCode)
+	}
+	var h HealthResponse
+	return &h, json.NewDecoder(resp.Body).Decode(&h)
+}
+
 // PrepareRequest correspond au POST /v1alpha1/ota/prepare.
 type PrepareRequest struct {
 	DeploymentID    string `json:"deployment_id"`
