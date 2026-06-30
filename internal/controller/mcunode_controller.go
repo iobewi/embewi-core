@@ -23,7 +23,8 @@ import (
 
 const (
 	// HeartbeatTimeout : si aucun heartbeat reçu depuis cette durée → ready=false.
-	HeartbeatTimeout = 30 * time.Second
+	// Contrat §8a : Ready=True ← heartbeat reçu < 2 × période agent (5 s) = 10 s.
+	HeartbeatTimeout = 10 * time.Second
 
 	labelManagedBy = "embewi.io/managed-by"
 	labelNodeID    = "embewi.io/node-id"
@@ -59,6 +60,10 @@ func (r *McuNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		wantState = "offline"
 	}
 
+	// Capturer les valeurs avant mutation pour le guard de log (comparaison correcte).
+	prevReady := node.Status.Ready
+	prevState := node.Status.State
+
 	patch := client.MergeFrom(node.DeepCopy())
 	node.Status.Ready = wantReady
 	node.Status.State = wantState
@@ -93,7 +98,7 @@ func (r *McuNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := r.Status().Patch(ctx, &node, patch); err != nil {
 		return ctrl.Result{}, err
 	}
-	if wantState != node.Status.State || wantReady != node.Status.Ready {
+	if prevState != wantState || prevReady != wantReady {
 		logger.Info("status →", "state", wantState, "ready", wantReady)
 	}
 
