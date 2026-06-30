@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/embewi/core/api/v1alpha1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -20,16 +21,21 @@ import (
 )
 
 // HeartbeatPayload correspond au corps POST /v1alpha1/heartbeat (contrat §5).
+// Champs requis : node_id, ip, ts, state, ota_validated, config_generation.
 type HeartbeatPayload struct {
-	NodeID         string `json:"node_id"`
-	TS             int64  `json:"ts"`
-	State          string `json:"state"`
-	DeploymentID   string `json:"deployment_id"`
-	FirmwareDigest string `json:"firmware_digest"`
-	OtaValidated   bool   `json:"ota_validated"`
-	UptimeMs       int64  `json:"uptime_ms"`
-	HeapFree       int    `json:"heap_free"`
-	RSSI           int    `json:"rssi"`
+	NodeID          string  `json:"node_id"`
+	IP              string  `json:"ip"`
+	TS              int64   `json:"ts"`
+	State           string  `json:"state"`
+	DeploymentID    string  `json:"deployment_id"`
+	FirmwareDigest  string  `json:"firmware_digest"`
+	OtaValidated    bool    `json:"ota_validated"`
+	UptimeMs        int64   `json:"uptime_ms"`
+	HeapFree        int     `json:"heap_free"`
+	RSSI            int     `json:"rssi"`
+	ConfigGeneration int    `json:"config_generation"`
+	TempCelsius     float64 `json:"temp_celsius"`
+	TaskHwmMin      int     `json:"task_hwm_min"`
 }
 
 // LogPayload correspond au corps POST /v1alpha1/logs (contrat §5).
@@ -108,23 +114,57 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// IP source du device (pour EndpointSlice).
-	sourceIP, _, _ := net.SplitHostPort(r.RemoteAddr)
+	// IP du device : contrat §5/§8 — utiliser heartbeat.ip, pas RemoteAddr.
+	// Fallback sur RemoteAddr si le champ est absent (compatibilité).
+	sourceIP := hb.IP
+	if sourceIP == "" {
+		sourceIP, _, _ = net.SplitHostPort(r.RemoteAddr)
+	}
 
 	now := metav1.NewTime(time.Now())
 	ready := hb.State == "running" && hb.OtaValidated
 
 	patch := client.MergeFrom(node.DeepCopy())
-	node.Status.IP            = sourceIP
-	node.Status.State         = hb.State
+	node.Status.IP             = sourceIP
+	node.Status.State          = hb.State
 	node.Status.FirmwareDigest = hb.FirmwareDigest
-	node.Status.DeploymentID  = hb.DeploymentID
-	node.Status.OtaValidated  = hb.OtaValidated
-	node.Status.HeapFree      = hb.HeapFree
-	node.Status.RSSI          = hb.RSSI
-	node.Status.UptimeMs      = hb.UptimeMs
-	node.Status.Ready         = ready
-	node.Status.LastHeartbeat = &now
+	node.Status.DeploymentID   = hb.DeploymentID
+	node.Status.OtaValidated   = hb.OtaValidated
+	node.Status.HeapFree       = hb.HeapFree
+	node.Status.RSSI           = hb.RSSI
+	node.Status.UptimeMs       = hb.UptimeMs
+	node.Status.ConfigGeneration = hb.ConfigGeneration
+	node.Status.TaskHwmMin     = hb.TaskHwmMin
+	node.Status.Ready          = ready
+	node.Status.LastHeartbeat  = &now
+
+	// temp_celsius : filtrer la sentinelle -127.0 (capteur SoC indisponible).
+	if hb.TempCelsius != -127.0 {
+		node.Status.TempCelsius = hb.TempCelsius
+	}
+
+	// Conditions §8a : Provisioned + Ready mis à jour à chaque heartbeat reçu.
+	apimeta.SetStatusCondition(&node.Status.Conditions, metav1.Condition{
+		Type:    "Provisioned",
+		Status:  metav1.ConditionTrue,
+		Reason:  "ProvisioningComplete",
+		Message: "heartbeat reçu, node_id et token établis",
+	})
+	if ready {
+		apimeta.SetStatusCondition(&node.Status.Conditions, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionTrue,
+			Reason:  "HeartbeatOK",
+			Message: fmt.Sprintf("heartbeat reçu, state=%s", hb.State),
+		})
+	} else {
+		apimeta.SetStatusCondition(&node.Status.Conditions, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "HeartbeatOK",
+			Message: fmt.Sprintf("heartbeat reçu, state=%s (not ready)", hb.State),
+		})
+	}
 
 	if err := s.client.Status().Patch(r.Context(), node, patch); err != nil {
 		logger.Error(err, "patch McuNode status failed")

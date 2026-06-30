@@ -8,6 +8,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -165,6 +167,7 @@ func (r *McuDeploymentReconciler) phasePulling(ctx context.Context, dep *v1alpha
 	}
 	dep.Status.Digest = meta.Digest
 	dep.Status.Size = meta.Size
+	setDeploymentConditions(dep, v1alpha1.PhasePreparing, "")
 	if err := r.Status().Patch(ctx, dep, patch); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -343,6 +346,7 @@ func (r *McuDeploymentReconciler) setPhase(ctx context.Context, dep *v1alpha1.Mc
 	dep.Status.Phase = phase
 	dep.Status.BoundNode = boundNode
 	dep.Status.Message = msg
+	setDeploymentConditions(dep, phase, msg)
 	if err := r.Status().Patch(ctx, dep, patch); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -354,11 +358,62 @@ func (r *McuDeploymentReconciler) fail(ctx context.Context, dep *v1alpha1.McuDep
 	patch := client.MergeFrom(dep.DeepCopy())
 	dep.Status.Phase = v1alpha1.PhaseFailed
 	dep.Status.Message = fmt.Sprintf("[%s] %s", reason, msg)
+	apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
+		Type:    "Progressing",
+		Status:  metav1.ConditionFalse,
+		Reason:  "OTAFailed",
+		Message: msg,
+	})
+	apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
+		Type:    "Available",
+		Status:  metav1.ConditionFalse,
+		Reason:  "DeviceDegraded",
+		Message: fmt.Sprintf("[%s] %s", reason, msg),
+	})
 	if err := r.Status().Patch(ctx, dep, patch); err != nil {
 		return ctrl.Result{}, err
 	}
 	log.FromContext(ctx).Error(nil, "déploiement échoué", "reason", reason, "msg", msg)
 	return ctrl.Result{}, nil
+}
+
+// setDeploymentConditions met à jour Progressing + Available selon la phase (§8a contrat).
+func setDeploymentConditions(dep *v1alpha1.McuDeployment, phase v1alpha1.McuDeploymentPhase, msg string) {
+	switch phase {
+	case v1alpha1.PhaseDeployed:
+		apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
+			Type:    "Progressing",
+			Status:  metav1.ConditionFalse,
+			Reason:  "DeploymentComplete",
+			Message: "OTA terminé, firmware stable",
+		})
+		apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
+			Type:    "Available",
+			Status:  metav1.ConditionTrue,
+			Reason:  "WorkloadReady",
+			Message: "EndpointSlice.ready=true, workload joignable",
+		})
+	case v1alpha1.PhaseConfirming:
+		apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
+			Type:    "Progressing",
+			Status:  metav1.ConditionTrue,
+			Reason:  "OTAInProgress",
+			Message: "attente confirmation device (pending_verify)",
+		})
+		apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
+			Type:    "Available",
+			Status:  metav1.ConditionFalse,
+			Reason:  "PendingVerification",
+			Message: "image non encore validée par le device",
+		})
+	default:
+		apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
+			Type:    "Progressing",
+			Status:  metav1.ConditionTrue,
+			Reason:  "OTAInProgress",
+			Message: fmt.Sprintf("phase: %s", phase),
+		})
+	}
 }
 
 // nodeToDeployments mappe un McuNode vers les McuDeployment en phase Confirming qui l'attendent.

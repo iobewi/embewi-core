@@ -9,6 +9,7 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,6 +32,7 @@ const (
 // Responsabilités :
 //   - Créer/mettre à jour le Service selectorless + EndpointSlice associé (§8 contrat)
 //   - Marquer ready=false si heartbeat trop ancien
+//   - Mettre à jour les conditions Provisioned + Ready (§8a contrat)
 type McuNodeReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -47,7 +49,6 @@ func (r *McuNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	// Détecte le timeout heartbeat — device offline si le dernier heartbeat est trop vieux.
 	heartbeatExpired := node.Status.LastHeartbeat == nil ||
 		time.Since(node.Status.LastHeartbeat.Time) > HeartbeatTimeout
 
@@ -57,13 +58,38 @@ func (r *McuNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		wantState = "offline"
 	}
 
-	if wantReady != node.Status.Ready || wantState != node.Status.State {
-		patch := client.MergeFrom(node.DeepCopy())
-		node.Status.Ready = wantReady
-		node.Status.State = wantState
-		if err := r.Status().Patch(ctx, &node, patch); err != nil {
-			return ctrl.Result{}, err
-		}
+	patch := client.MergeFrom(node.DeepCopy())
+	node.Status.Ready = wantReady
+	node.Status.State = wantState
+
+	// Conditions §8a — pilotées par le timeout heartbeat.
+	if node.Status.LastHeartbeat == nil {
+		// Jamais enrôlé — device pas encore connecté.
+		apimeta.SetStatusCondition(&node.Status.Conditions, metav1.Condition{
+			Type:    "Provisioned",
+			Status:  metav1.ConditionFalse,
+			Reason:  "ProvisioningPending",
+			Message: "aucun heartbeat reçu, device non encore connecté",
+		})
+		apimeta.SetStatusCondition(&node.Status.Conditions, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionUnknown,
+			Reason:  "NotProvisioned",
+			Message: "device jamais enrôlé",
+		})
+	} else if heartbeatExpired {
+		apimeta.SetStatusCondition(&node.Status.Conditions, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "HeartbeatTimeout",
+			Message: fmt.Sprintf("aucun heartbeat depuis %v", time.Since(node.Status.LastHeartbeat.Time).Round(time.Second)),
+		})
+	}
+
+	if err := r.Status().Patch(ctx, &node, patch); err != nil {
+		return ctrl.Result{}, err
+	}
+	if wantState != node.Status.State || wantReady != node.Status.Ready {
 		logger.Info("status →", "state", wantState, "ready", wantReady)
 	}
 

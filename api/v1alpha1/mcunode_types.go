@@ -44,9 +44,12 @@ type McuNodeStatus struct {
 	OtaValidated bool `json:"otaValidated"`
 
 	// Métriques temps réel.
-	HeapFree  int `json:"heapFree,omitempty"`
-	RSSI      int `json:"rssi,omitempty"`
-	UptimeMs  int64 `json:"uptimeMs,omitempty"`
+	HeapFree        int     `json:"heapFree,omitempty"`
+	RSSI            int     `json:"rssi,omitempty"`
+	UptimeMs        int64   `json:"uptimeMs,omitempty"`
+	ConfigGeneration int    `json:"configGeneration,omitempty"`
+	TempCelsius     float64 `json:"tempCelsius,omitempty"`
+	TaskHwmMin      int     `json:"taskHwmMin,omitempty"`
 
 	// Capacités hardware (peuplées depuis GET /info au premier contact).
 	Chip       string `json:"chip,omitempty"`

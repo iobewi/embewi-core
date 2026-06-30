@@ -70,8 +70,9 @@ type InfoResponse struct {
 		Digest       string `json:"digest"`
 		DeploymentID string `json:"deployment_id"`
 	} `json:"staged"`
-	State   string `json:"state"`
-	AppPort int    `json:"app_port"`
+	State            string `json:"state"`
+	AppPort          int    `json:"app_port"`
+	ConfigGeneration int    `json:"config_generation"`
 }
 
 func (c *Client) GetInfo() (*InfoResponse, error) {
