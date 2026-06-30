@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/embewi/core/api/v1alpha1"
@@ -133,6 +134,9 @@ func (r *McuNodeReconciler) reconcileService(ctx context.Context, node *v1alpha1
 			// Selectorless : l'EndpointSlice pointe directement sur l'IP ESP.
 		},
 	}
+	if err := controllerutil.SetControllerReference(node, desired, r.Scheme); err != nil {
+		return fmt.Errorf("SetControllerReference Service: %w", err)
+	}
 
 	var existing corev1.Service
 	err := r.Get(ctx, types.NamespacedName{Name: svcName, Namespace: node.Namespace}, &existing)
@@ -144,6 +148,10 @@ func (r *McuNodeReconciler) reconcileService(ctx context.Context, node *v1alpha1
 	}
 	patch := client.MergeFrom(existing.DeepCopy())
 	existing.Spec.Ports = desired.Spec.Ports
+	// Garantir la présence de l'OwnerReference sur les objets créés avant ce fix.
+	if err := controllerutil.SetControllerReference(node, &existing, r.Scheme); err != nil {
+		return fmt.Errorf("SetControllerReference Service existant: %w", err)
+	}
 	return r.Patch(ctx, &existing, patch)
 }
 
@@ -181,6 +189,9 @@ func (r *McuNodeReconciler) reconcileEndpointSlice(ctx context.Context, node *v1
 			Protocol: &proto,
 		}},
 	}
+	if err := controllerutil.SetControllerReference(node, desired, r.Scheme); err != nil {
+		return fmt.Errorf("SetControllerReference EndpointSlice: %w", err)
+	}
 
 	var existing discoveryv1.EndpointSlice
 	err := r.Get(ctx, types.NamespacedName{Name: sliceName, Namespace: node.Namespace}, &existing)
@@ -192,7 +203,11 @@ func (r *McuNodeReconciler) reconcileEndpointSlice(ctx context.Context, node *v1
 	}
 	patch := client.MergeFrom(existing.DeepCopy())
 	existing.Endpoints = desired.Endpoints
-	existing.Ports      = desired.Ports
+	existing.Ports = desired.Ports
+	// Garantir la présence de l'OwnerReference sur les objets créés avant ce fix.
+	if err := controllerutil.SetControllerReference(node, &existing, r.Scheme); err != nil {
+		return fmt.Errorf("SetControllerReference EndpointSlice existant: %w", err)
+	}
 	return r.Patch(ctx, &existing, patch)
 }
 

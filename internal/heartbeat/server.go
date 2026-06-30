@@ -5,13 +5,16 @@ package heartbeat
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"github.com/embewi/core/api/v1alpha1"
 	"github.com/embewi/core/internal/metrics"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -56,10 +59,36 @@ type Server struct {
 	client      client.Client
 	TLSCertFile string // chemin PEM du certificat serveur (vide = HTTP plain)
 	TLSKeyFile  string // chemin PEM de la clé privée
+	TokenSecret string // nom du Secret K8s contenant les tokens Bearer (défaut : "embewi-tokens")
 }
 
 func New(addr string, c client.Client) *Server {
 	return &Server{addr: addr, client: c}
+}
+
+// validateToken vérifie le Bearer token du heartbeat contre le Secret K8s.
+// Comparaison temps-constant (§1 contrat).
+func (s *Server) validateToken(ctx context.Context, r *http.Request, node *v1alpha1.McuNode) bool {
+	auth := r.Header.Get("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		return false
+	}
+	provided := strings.TrimPrefix(auth, "Bearer ")
+
+	secretName := s.TokenSecret
+	if secretName == "" {
+		secretName = "embewi-tokens"
+	}
+	var secret corev1.Secret
+	if err := s.client.Get(ctx, client.ObjectKey{Name: secretName, Namespace: node.Namespace}, &secret); err != nil {
+		log.FromContext(ctx).Error(err, "lecture Secret token échouée", "secret", secretName)
+		return false
+	}
+	expected, ok := secret.Data[node.Spec.NodeID]
+	if !ok {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(strings.TrimSpace(string(expected))), []byte(provided)) == 1
 }
 
 // Handler retourne le http.Handler du serveur heartbeat.
@@ -128,6 +157,12 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		logger.Error(err, "McuNode introuvable pour ce node_id")
 		// On répond 200 : l'agent ne doit pas crasher si le Core ne connaît pas encore ce node.
 		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Validation Bearer token — comparaison temps-constant (§1 contrat).
+	if !s.validateToken(r.Context(), r, node) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 

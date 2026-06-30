@@ -101,6 +101,7 @@ func main() {
 	hbSrv := heartbeat.New(heartbeatAddr, mgr.GetClient())
 	hbSrv.TLSCertFile = heartbeatCert
 	hbSrv.TLSKeyFile = heartbeatKey
+	hbSrv.TokenSecret = tokenSecret
 	if err := mgr.Add(hbSrv); err != nil {
 		logger.Error(err, "heartbeat server add failed")
 		os.Exit(1)

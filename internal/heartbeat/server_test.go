@@ -43,22 +43,44 @@ func newNode(name, nodeID string) *v1alpha1.McuNode {
 
 func postHB(t *testing.T, ts *httptest.Server, payload interface{}) *http.Response {
 	t.Helper()
+	return postHBAuth(t, ts, payload, "")
+}
+
+func postHBAuth(t *testing.T, ts *httptest.Server, payload interface{}, token string) *http.Response {
+	t.Helper()
 	body, _ := json.Marshal(payload)
-	resp, err := ts.Client().Post(ts.URL+"/v1alpha1/heartbeat", "application/json", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/v1alpha1/heartbeat", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("NewRequest : %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := ts.Client().Do(req)
 	if err != nil {
 		t.Fatalf("POST heartbeat : %v", err)
 	}
 	return resp
 }
 
+// tokenSecret crée un corev1.Secret de test contenant le token Bearer d'un node.
+func tokenSecret(nodeID, token string) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "embewi-tokens", Namespace: "embewi"},
+		Data:       map[string][]byte{nodeID: []byte(token)},
+	}
+}
+
 // TestHandleHeartbeat_UpdatesNodeStatus vérifie que le status du McuNode est mis à jour.
 func TestHandleHeartbeat_UpdatesNodeStatus(t *testing.T) {
 	scheme := testScheme(t)
 	node := newNode("embewi-abc", "embewi-abc123")
+	secret := tokenSecret("embewi-abc123", "tok-abc")
 
 	fc := fake.NewClientBuilder().
 		WithScheme(scheme).
-		WithObjects(node).
+		WithObjects(node, secret).
 		WithStatusSubresource(&v1alpha1.McuNode{}).
 		Build()
 
@@ -66,7 +88,7 @@ func TestHandleHeartbeat_UpdatesNodeStatus(t *testing.T) {
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
-	resp := postHB(t, ts, heartbeat.HeartbeatPayload{
+	resp := postHBAuth(t, ts, heartbeat.HeartbeatPayload{
 		NodeID:           "embewi-abc123",
 		IP:               "192.168.1.100",
 		State:            "running",
@@ -74,7 +96,7 @@ func TestHandleHeartbeat_UpdatesNodeStatus(t *testing.T) {
 		HeapFree:         82344,
 		RSSI:             -61,
 		ConfigGeneration: 2,
-	})
+	}, "tok-abc")
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -128,9 +150,10 @@ func TestHandleHeartbeat_NodeNotFound_Returns200(t *testing.T) {
 func TestHandleHeartbeat_TempFilter(t *testing.T) {
 	scheme := testScheme(t)
 	node := newNode("esp-temp", "esp-temp-id")
+	secret := tokenSecret("esp-temp-id", "tok-temp")
 	fc := fake.NewClientBuilder().
 		WithScheme(scheme).
-		WithObjects(node).
+		WithObjects(node, secret).
 		WithStatusSubresource(&v1alpha1.McuNode{}).
 		Build()
 
@@ -139,7 +162,7 @@ func TestHandleHeartbeat_TempFilter(t *testing.T) {
 	defer ts.Close()
 
 	// Premier heartbeat : temp valide.
-	postHB(t, ts, heartbeat.HeartbeatPayload{NodeID: "esp-temp-id", State: "running", TempCelsius: 41.5})
+	postHBAuth(t, ts, heartbeat.HeartbeatPayload{NodeID: "esp-temp-id", State: "running", TempCelsius: 41.5}, "tok-temp")
 
 	var n v1alpha1.McuNode
 	fc.Get(context.Background(), types.NamespacedName{Name: "esp-temp", Namespace: "embewi"}, &n) //nolint:errcheck
@@ -148,7 +171,7 @@ func TestHandleHeartbeat_TempFilter(t *testing.T) {
 	}
 
 	// Second heartbeat : sentinelle -127.0 — la valeur ne doit pas changer.
-	postHB(t, ts, heartbeat.HeartbeatPayload{NodeID: "esp-temp-id", State: "running", TempCelsius: -127.0})
+	postHBAuth(t, ts, heartbeat.HeartbeatPayload{NodeID: "esp-temp-id", State: "running", TempCelsius: -127.0}, "tok-temp")
 	fc.Get(context.Background(), types.NamespacedName{Name: "esp-temp", Namespace: "embewi"}, &n) //nolint:errcheck
 	if n.Status.TempCelsius != 41.5 {
 		t.Errorf("TempCelsius après sentinelle : got %v, want 41.5 (doit rester inchangé)", n.Status.TempCelsius)
@@ -159,9 +182,10 @@ func TestHandleHeartbeat_TempFilter(t *testing.T) {
 func TestHandleHeartbeat_IPFallback(t *testing.T) {
 	scheme := testScheme(t)
 	node := newNode("esp-ip", "esp-ip-id")
+	secret := tokenSecret("esp-ip-id", "tok-ip")
 	fc := fake.NewClientBuilder().
 		WithScheme(scheme).
-		WithObjects(node).
+		WithObjects(node, secret).
 		WithStatusSubresource(&v1alpha1.McuNode{}).
 		Build()
 
@@ -170,7 +194,7 @@ func TestHandleHeartbeat_IPFallback(t *testing.T) {
 	defer ts.Close()
 
 	// Heartbeat sans champ ip → fallback sur RemoteAddr (127.0.0.1 en test).
-	postHB(t, ts, heartbeat.HeartbeatPayload{NodeID: "esp-ip-id", State: "running", IP: ""})
+	postHBAuth(t, ts, heartbeat.HeartbeatPayload{NodeID: "esp-ip-id", State: "running", IP: ""}, "tok-ip")
 
 	var n v1alpha1.McuNode
 	fc.Get(context.Background(), types.NamespacedName{Name: "esp-ip", Namespace: "embewi"}, &n) //nolint:errcheck
@@ -179,6 +203,28 @@ func TestHandleHeartbeat_IPFallback(t *testing.T) {
 	}
 	if n.Status.IP == "192.168.1.100" {
 		t.Error("IP : ne doit pas provenir du payload vide")
+	}
+}
+
+// TestHandleHeartbeat_InvalidToken vérifie que un mauvais Bearer token retourne 401.
+func TestHandleHeartbeat_InvalidToken(t *testing.T) {
+	scheme := testScheme(t)
+	node := newNode("esp-auth", "esp-auth-id")
+	secret := tokenSecret("esp-auth-id", "correct-token")
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node, secret).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	srv := heartbeat.New(":0", fc)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp := postHBAuth(t, ts, heartbeat.HeartbeatPayload{NodeID: "esp-auth-id", State: "running"}, "wrong-token")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("token invalide : got %d, want 401", resp.StatusCode)
 	}
 }
 

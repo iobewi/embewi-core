@@ -4,6 +4,8 @@
 package metrics
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
@@ -50,6 +52,13 @@ var (
 	}, []string{"node_id", "workload", "chip"})
 )
 
+// prevLabels trace les derniers labels utilisés par node_id pour supprimer les anciennes
+// séries Prometheus quand deployment_id ou chip change (prévient la fuite de cardinalité).
+var (
+	labelsMu   sync.Mutex
+	prevLabels = make(map[string]prometheus.Labels) // node_id → derniers labels actifs
+)
+
 func init() {
 	ctrlmetrics.Registry.MustRegister(
 		HeapFreeBytes,
@@ -78,14 +87,37 @@ type HeartbeatData struct {
 	OtaValidated     bool
 }
 
+// deleteLabels supprime toutes les séries d'un label-set des 8 gauges.
+func deleteLabels(l prometheus.Labels) {
+	HeapFreeBytes.Delete(l)
+	WifiRssiDbm.Delete(l)
+	UptimeSeconds.Delete(l)
+	TemperatureCelsius.Delete(l)
+	TaskStackHwmBytes.Delete(l)
+	LastHeartbeatTimestamp.Delete(l)
+	ConfigGeneration.Delete(l)
+	OtaValidated.Delete(l)
+}
+
 // UpdateFromHeartbeat met à jour toutes les gauges mcunode_* (§8b contrat).
-// Appelé à chaque heartbeat reçu depuis le serveur heartbeat.
+// Quand deployment_id ou chip change pour un node, les anciennes séries sont supprimées
+// pour éviter la fuite de cardinalité Prometheus.
 func UpdateFromHeartbeat(d HeartbeatData) {
 	labels := prometheus.Labels{
 		"node_id":  d.NodeID,
 		"workload": d.Workload,
 		"chip":     d.Chip,
 	}
+
+	// Supprimer les anciennes séries si les labels dimensionnels ont changé.
+	labelsMu.Lock()
+	if old, exists := prevLabels[d.NodeID]; exists {
+		if old["workload"] != labels["workload"] || old["chip"] != labels["chip"] {
+			deleteLabels(old)
+		}
+	}
+	prevLabels[d.NodeID] = labels
+	labelsMu.Unlock()
 
 	HeapFreeBytes.With(labels).Set(float64(d.HeapFree))
 	WifiRssiDbm.With(labels).Set(float64(d.RSSI))
