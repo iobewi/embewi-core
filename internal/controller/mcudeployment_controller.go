@@ -73,12 +73,9 @@ func (r *McuDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
-	// Déploiement Deployed : terminal pour l'OTA, mais traite les mises à jour config (§7a).
+	// Déploiement Deployed : surveille Available/HeartbeatTimeout et traite les mises à jour config.
 	if dep.Status.Phase == v1alpha1.PhaseDeployed {
-		if dep.Spec.ConfigMapRef != "" {
-			return r.reconcileConfigOnly(ctx, &dep)
-		}
-		return ctrl.Result{}, nil
+		return r.reconcileDeployed(ctx, &dep)
 	}
 
 	switch dep.Status.Phase {
@@ -326,11 +323,13 @@ func (r *McuDeploymentReconciler) phasePreparing(ctx context.Context, dep *v1alp
 	}
 
 	// Idempotence §6 : lire staged pour décider où reprendre après un crash Core.
+	// Persiste aussi chip/idf/appPort dans McuNode.Status (§8 contrat).
 	info, err := cli.GetInfo()
 	if err != nil {
 		log.FromContext(ctx).Error(err, "GET /info échoué (transitoire)")
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
+	r.persistNodeInfo(ctx, node, info)
 	switch {
 	case info.Staged.State == "activating" && info.Staged.DeploymentID == dep.Status.DeploymentID:
 		log.FromContext(ctx).Info("staged=activating (idempotence) → skip write+activate, attente heartbeat")
@@ -414,7 +413,7 @@ func (r *McuDeploymentReconciler) phaseWriting(ctx context.Context, dep *v1alpha
 
 // phaseActivating : POST /ota/activate → reboot device.
 func (r *McuDeploymentReconciler) phaseActivating(ctx context.Context, dep *v1alpha1.McuDeployment) (ctrl.Result, error) {
-	_, cli, err := r.nodeClient(ctx, dep)
+	node, cli, err := r.nodeClient(ctx, dep)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -427,6 +426,7 @@ func (r *McuDeploymentReconciler) phaseActivating(ctx context.Context, dep *v1al
 		log.FromContext(ctx).Error(err, "GET /info avant activate échoué (transitoire)")
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
+	r.persistNodeInfo(ctx, node, info)
 	alreadyActivated :=
 		(info.Staged.State == "activating" && info.Staged.DeploymentID == dep.Status.DeploymentID) ||
 			info.State == "pending_verify"
@@ -555,6 +555,7 @@ func (r *McuDeploymentReconciler) fail(ctx context.Context, dep *v1alpha1.McuDep
 		Reason:  "DeviceDegraded",
 		Message: fmt.Sprintf("[%s] %s", reason, msg),
 	})
+	setReadyCondition(dep)
 	if err := r.Status().Patch(ctx, dep, patch); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -562,7 +563,32 @@ func (r *McuDeploymentReconciler) fail(ctx context.Context, dep *v1alpha1.McuDep
 	return ctrl.Result{}, nil
 }
 
-// setDeploymentConditions met à jour Progressing + Available selon la phase (§8a contrat).
+// setReadyCondition dérive la condition Ready synthétique (§8a contrat).
+// Ready=True ← Progressing=False ET Available=True.
+// Compatible : kubectl wait mcudeployment/x --for=condition=Ready
+func setReadyCondition(dep *v1alpha1.McuDeployment) {
+	progressing := apimeta.FindStatusCondition(dep.Status.Conditions, "Progressing")
+	available := apimeta.FindStatusCondition(dep.Status.Conditions, "Available")
+	if progressing != nil && available != nil &&
+		progressing.Status == metav1.ConditionFalse &&
+		available.Status == metav1.ConditionTrue {
+		apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionTrue,
+			Reason:  "DeploymentReady",
+			Message: "Progressing=False et Available=True",
+		})
+	} else {
+		apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "DeploymentNotReady",
+			Message: "déploiement en cours ou device non disponible",
+		})
+	}
+}
+
+// setDeploymentConditions met à jour Progressing + Available + Ready selon la phase (§8a contrat).
 func setDeploymentConditions(dep *v1alpha1.McuDeployment, phase v1alpha1.McuDeploymentPhase, msg string) {
 	switch phase {
 	case v1alpha1.PhaseDeployed:
@@ -599,6 +625,7 @@ func setDeploymentConditions(dep *v1alpha1.McuDeployment, phase v1alpha1.McuDepl
 			Message: fmt.Sprintf("phase: %s", phase),
 		})
 	}
+	setReadyCondition(dep)
 }
 
 // nodeToDeployments mappe un McuNode vers les McuDeployment en phase Confirming qui l'attendent.
@@ -615,7 +642,12 @@ func (r *McuDeploymentReconciler) nodeToDeployments(ctx context.Context, obj cli
 	}
 	var reqs []reconcile.Request
 	for _, dep := range list.Items {
-		if dep.Status.Phase == v1alpha1.PhaseConfirming && dep.Status.BoundNode == node.Name {
+		if dep.Status.BoundNode != node.Name {
+			continue
+		}
+		// PhaseConfirming : attente heartbeat running + ota_validated.
+		// PhaseDeployed   : surveillance Available/HeartbeatTimeout (§8a contrat).
+		if dep.Status.Phase == v1alpha1.PhaseConfirming || dep.Status.Phase == v1alpha1.PhaseDeployed {
 			reqs = append(reqs, reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      dep.Name,
@@ -625,6 +657,62 @@ func (r *McuDeploymentReconciler) nodeToDeployments(ctx context.Context, obj cli
 		}
 	}
 	return reqs
+}
+
+// persistNodeInfo persiste les capacités hardware depuis GET /info dans McuNode.Status.
+// Chip, IDFVersion et AppPort sont inconnus jusqu'au premier contact — ne bloquer jamais sur cette erreur.
+func (r *McuDeploymentReconciler) persistNodeInfo(ctx context.Context, node *v1alpha1.McuNode, info *agent.InfoResponse) {
+	patch := client.MergeFrom(node.DeepCopy())
+	node.Status.Chip = info.Chip
+	node.Status.IDFVersion = info.IDFVersion
+	node.Status.FlashSize = info.FlashSize
+	node.Status.RAMSize = info.RAMSize
+	if info.AppPort != 0 {
+		node.Status.AppPort = info.AppPort
+	}
+	if err := r.Status().Patch(ctx, node, patch); err != nil {
+		log.FromContext(ctx).Error(err, "patch McuNode hardware info échoué (non bloquant)")
+	}
+}
+
+// reconcileDeployed gère un McuDeployment en phase Deployed :
+//   - Available/HeartbeatTimeout si le node ne répond plus (§8a contrat)
+//   - Push config si McuConfigMap diverge (§7a contrat)
+func (r *McuDeploymentReconciler) reconcileDeployed(ctx context.Context, dep *v1alpha1.McuDeployment) (ctrl.Result, error) {
+	var node v1alpha1.McuNode
+	if err := r.Get(ctx, client.ObjectKey{Name: dep.Status.BoundNode, Namespace: dep.Namespace}, &node); err != nil {
+		log.FromContext(ctx).Error(err, "McuNode introuvable en phase Deployed")
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	}
+
+	heartbeatExpired := node.Status.LastHeartbeat == nil ||
+		time.Since(node.Status.LastHeartbeat.Time) > HeartbeatTimeout
+
+	patch := client.MergeFrom(dep.DeepCopy())
+	if heartbeatExpired {
+		apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
+			Type:    "Available",
+			Status:  metav1.ConditionFalse,
+			Reason:  "HeartbeatTimeout",
+			Message: fmt.Sprintf("aucun heartbeat depuis plus de %v", HeartbeatTimeout),
+		})
+	} else {
+		apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
+			Type:    "Available",
+			Status:  metav1.ConditionTrue,
+			Reason:  "WorkloadReady",
+			Message: "EndpointSlice.ready=true, workload joignable",
+		})
+	}
+	setReadyCondition(dep)
+	if err := r.Status().Patch(ctx, dep, patch); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if dep.Spec.ConfigMapRef != "" {
+		return r.reconcileConfigOnly(ctx, dep)
+	}
+	return ctrl.Result{}, nil
 }
 
 func (r *McuDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {

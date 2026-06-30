@@ -155,6 +155,7 @@ func (c *Client) OTAWrite(deploymentID, digest string, size int64, firmware io.R
 	resp, err := c.doWith(c.httpStream, http.MethodPut, "/ota/write", firmware, map[string]string{
 		"Content-Type":           "application/octet-stream",
 		"Content-Length":         fmt.Sprintf("%d", size),
+		"Content-Range":          fmt.Sprintf("bytes 0-%d/%d", size-1, size),
 		"X-Embewi-Deployment-Id": deploymentID,
 		"X-Embewi-Digest":        digest,
 	})

@@ -201,6 +201,11 @@ func TestPhaseBinding_DeviceBusy(t *testing.T) {
 
 func TestPhaseDeployed_NoConfigMapRef_IsTerminal(t *testing.T) {
 	scheme := deployScheme(t)
+	now := metav1.Now()
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "done-node", Namespace: "embewi"},
+		Spec:       v1alpha1.McuNodeSpec{NodeID: "done-esp"},
+	}
 	dep := &v1alpha1.McuDeployment{
 		ObjectMeta: metav1.ObjectMeta{Name: "done-dep", Namespace: "embewi"},
 		Spec:       v1alpha1.McuDeploymentSpec{Firmware: v1alpha1.FirmwareSpec{Image: "reg/fw:v1"}},
@@ -208,13 +213,19 @@ func TestPhaseDeployed_NoConfigMapRef_IsTerminal(t *testing.T) {
 
 	fc := fake.NewClientBuilder().
 		WithScheme(scheme).
-		WithObjects(dep).
-		WithStatusSubresource(&v1alpha1.McuDeployment{}).
+		WithObjects(dep, node).
+		WithStatusSubresource(&v1alpha1.McuDeployment{}, &v1alpha1.McuNode{}).
 		Build()
 
-	// Forcer la phase Deployed.
+	// Forcer la phase Deployed avec BoundNode et heartbeat récent.
+	nodePatch := node.DeepCopy()
+	nodePatch.Status.LastHeartbeat = &now
+	nodePatch.Status.State = "running"
+	fc.Status().Update(context.Background(), nodePatch) //nolint:errcheck
+
 	depPatch := dep.DeepCopy()
 	depPatch.Status.Phase = v1alpha1.PhaseDeployed
+	depPatch.Status.BoundNode = "done-node"
 	fc.Status().Update(context.Background(), depPatch) //nolint:errcheck
 
 	r := &controller.McuDeploymentReconciler{
@@ -224,7 +235,7 @@ func TestPhaseDeployed_NoConfigMapRef_IsTerminal(t *testing.T) {
 	}
 
 	result := reconcile(t, r, dep.Name, dep.Namespace)
-	// Sans configMapRef, Deployed est terminal : pas de requeue immédiat.
+	// Sans configMapRef, Deployed ne requeue pas après la mise à jour des conditions.
 	if result.Requeue || result.RequeueAfter > 0 {
 		t.Errorf("Deployed terminal : attendu pas de requeue, got %+v", result)
 	}
