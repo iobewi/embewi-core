@@ -1,8 +1,8 @@
 # API agent
 
 Ce document couvre les deux sens de communication entre Core et agent :
-- **Core → ESP** (appels HTTP sortants du Core vers l'agent)
-- **ESP → Core** (flux entrants reçus par le serveur heartbeat)
+- **Core → Agent** : appels HTTP sortants du Core vers l'agent
+- **Agent → Core** : flux entrants reçus par le serveur heartbeat
 
 > Le contrat de référence reste `embewi-contract-v2.md`.
 
@@ -271,7 +271,7 @@ Séquence complète de rotation :
 
 ---
 
-# Flux sortants ESP → Core
+# Flux sortants Agent → Core
 
 ## `POST /v1alpha1/heartbeat`
 

@@ -4,7 +4,7 @@
 
 | Flag | Défaut | Description |
 |------|--------|-------------|
-| `--heartbeat-address` | `:8080` | Adresse d'écoute du serveur heartbeat/logs ESP→Core |
+| `--heartbeat-address` | `:8080` | Adresse d'écoute du serveur heartbeat/logs Agent→Core |
 | `--heartbeat-tls-cert` | `""` | Chemin PEM du certificat TLS (vide = HTTP plain) |
 | `--heartbeat-tls-key` | `""` | Chemin PEM de la clé privée TLS |
 | `--metrics-bind-address` | `:8082` | Métriques Prometheus |

@@ -29,11 +29,11 @@ MCU Agent (HTTPS :443)                Embewi Core (Go)
 
 **Deux flux :**
 
-- **Inbound** (Core → ESP) : requêtes HTTPS initiées par le Core vers l'agent. Le
-  Core orchestre les phases OTA, pousse la config, lit l'état.
-- **Outbound** (ESP → Core) : heartbeats et logs initiés par l'agent vers le
-  heartbeat server. Le Core ne poll jamais l'agent pour connaître son état — il
-  attend les heartbeats.
+- **Core → Agent** : requêtes HTTPS initiées par le Core vers l'agent. Le Core
+  orchestre les phases OTA, pousse la config, lit l'état.
+- **Agent → Core** : heartbeats et logs initiés par l'agent vers le heartbeat
+  server. Le Core ne poll jamais l'agent pour connaître son état — il attend les
+  heartbeats.
 
 ## Composants
 
@@ -41,14 +41,14 @@ MCU Agent (HTTPS :443)                Embewi Core (Go)
 |---------|------|
 | `internal/controller/mcunode_controller.go` | Réconcilie McuNode : Service + EndpointSlice, pilotage `ready` |
 | `internal/controller/mcudeployment_controller.go` | Machine d'état OTA : Binding → Pulling → … → Deployed |
-| `internal/heartbeat/server.go` | Reçoit heartbeats et logs ESP, patche McuNode.Status |
+| `internal/heartbeat/server.go` | Reçoit heartbeats et logs agent, patche McuNode.Status |
 | `internal/oci/client.go` | Résolution manifeste OCI + stream blob sans buffer |
 | `internal/agent/client.go` | Client HTTPS vers l'agent (prepare, write, activate, config) |
 | `api/v1alpha1/` | Types CRD + DeepCopy générés |
 
 ## Heartbeat server
 
-Serveur HTTP simple (flux interne cluster, pas HTTPS) qui reçoit les flux sortants ESP.
+Serveur HTTP simple (flux interne cluster, pas HTTPS) qui reçoit les flux sortants agent.
 Adresse par défaut : `:8080`. Configuré via `--heartbeat-address`.
 
 ### `POST /v1alpha1/heartbeat`

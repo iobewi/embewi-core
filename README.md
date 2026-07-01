@@ -198,7 +198,7 @@ kubectl get mcudep -w
 
 | Port | Rôle |
 |------|------|
-| `:8080` | Heartbeat server — reçoit POST ESP→Core (`/v1alpha1/heartbeat`, `/v1alpha1/logs`) |
+| `:8080` | Heartbeat server — reçoit POST Agent→Core (`/v1alpha1/heartbeat`, `/v1alpha1/logs`) |
 | `:8082` | Métriques Prometheus |
 | `:8083` | Health probes (`/healthz`, `/readyz`) |
 
@@ -283,7 +283,7 @@ embewi-core/
 ├── internal/
 │   ├── agent/client.go               Client HTTPS vers l'agent ESP
 │   ├── oci/client.go                 Client OCI Distribution Spec (pull firmware)
-│   ├── heartbeat/server.go           Serveur heartbeat ESP→Core
+│   ├── heartbeat/server.go           Serveur heartbeat Agent→Core
 │   └── controller/
 │       ├── mcunode_controller.go     EndpointSlice + timeout heartbeat
 │       └── mcudeployment_controller.go  Machine d'état OTA
@@ -318,13 +318,13 @@ go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
 | Composant | État |
 |-----------|------|
 | CRDs McuNode + McuDeployment | ✅ |
-| Heartbeat server (POST ESP→Core) | ✅ |
+| Heartbeat server (POST Agent→Core) | ✅ |
 | Patch McuNode.Status depuis heartbeat | ✅ |
 | Service + EndpointSlice par McuNode | ✅ |
 | Timeout heartbeat → ready=false | ✅ |
 | Binding McuDeployment → McuNode | ✅ |
 | Machine d'état OTA (phases) | ✅ |
-| Client HTTPS agent ESP | ✅ |
+| Client HTTPS agent MCU | ✅ |
 | Pull OCI firmware (manifest + blob) | ✅ |
 | Stream binaire PUT /ota/write | ✅ |
 | Tokens depuis Secret K8s | ✅ |

@@ -166,7 +166,7 @@ status:
 ""          → Binding    (résolution du McuNode cible)
 Binding     → Pulling    (résolution manifeste OCI → Digest + Size)
 Pulling     → Preparing  (POST /ota/prepare, idempotent via staged §6)
-Preparing   → Writing    (PUT /ota/write, stream OCI → ESP)
+Preparing   → Writing    (PUT /ota/write, stream OCI → Agent)
 Writing     → Activating (POST /ota/activate + reboot)
 Activating  → Confirming (attente heartbeat running + ota_validated)
 Confirming  → Deployed   (confirmation reçue)

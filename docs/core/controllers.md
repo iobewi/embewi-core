@@ -226,7 +226,7 @@ kubectl wait mcudeployment/wheel-left --for=condition=Ready --timeout=5m
 
 ## Serveur heartbeat
 
-(`internal/heartbeat/server.go`) — écoute les flux sortants ESP → Core.
+(`internal/heartbeat/server.go`) — écoute les flux sortants Agent → Core.
 
 ### `POST /v1alpha1/heartbeat`
 
