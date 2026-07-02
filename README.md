@@ -264,7 +264,7 @@ embewi-<node-name>  →  port app (défaut 8080)
 
 **EndpointSlice** :
 ```
-embewi-<node-name>  →  IP ESP, ready=<status.ready>
+embewi-<node-name>  →  IP Agent, ready=<status.ready>
 ```
 
 `ready` est `true` uniquement si `state==running && ota_validated==true && heartbeat récent (<30s)`.
@@ -281,7 +281,7 @@ embewi-core/
 │   ├── groupversion_info.go          groupe embewi.io/v1alpha1
 │   └── zz_generated.deepcopy.go     DeepCopy (bootstrap manuel)
 ├── internal/
-│   ├── agent/client.go               Client HTTPS vers l'agent ESP
+│   ├── agent/client.go               Client HTTPS vers l'agent MCU
 │   ├── oci/client.go                 Client OCI Distribution Spec (pull firmware)
 │   ├── heartbeat/server.go           Serveur heartbeat Agent→Core
 │   └── controller/

@@ -12,7 +12,7 @@
 | `--token-secret` | `embewi-tokens` | Fallback Secret centralisé si `spec.tokenRef` absent |
 | `--leader-elect` | `false` | Activer l'élection de leader (multi-répliques) |
 
-> En production, les devices ESP imposent HTTPS (§1 contrat) : configurer
+> En production, les devices MCU imposent HTTPS (§1 contrat) : configurer
 > `--heartbeat-tls-cert` et `--heartbeat-tls-key`, ou terminer TLS à l'ingress.
 
 ## Variables d'environnement
@@ -31,8 +31,8 @@
 | `HeartbeatTimeout` | **10 s** | Délai sans heartbeat → `ready=false` (2 × période agent 5 s, §8a contrat) |
 | `ConfirmTimeout` | 2 min | Délai max pour confirmation après activate (§3 contrat) |
 | Requeue Pulling error | 30 s | Retry si registre OCI injoignable |
-| Requeue Preparing/Activating error | 15 s | Retry si agent ESP injoignable |
-| Requeue Writing error | 30 s | Retry si stream OCI ou write ESP échoue |
+| Requeue Preparing/Activating error | 15 s | Retry si agent MCU injoignable |
+| Requeue Writing error | 30 s | Retry si stream OCI ou write agent échoue |
 | Requeue Confirming | 10 s | Polling heartbeat en phase Confirming |
 
 ## Token Bearer — Secret par device

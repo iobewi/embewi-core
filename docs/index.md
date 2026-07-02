@@ -23,7 +23,7 @@ Architecture & heartbeat server <core/architecture>
 CRD — McuNode, McuDeployment <core/crd>
 Contrôleurs <core/controllers>
 Client OCI <core/oci>
-API agent (Core ↔ MCU) <core/agent-api>
+API agent (Core ↔ Agent) <core/agent-api>
 Configuration <core/configuration>
 Design interne <core/design>
 ```

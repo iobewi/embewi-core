@@ -2,7 +2,7 @@
 
 ## McuNode
 
-Représente un device ESP physique. Le status est **entièrement piloté par les
+Représente un device MCU physique. Le status est **entièrement piloté par les
 heartbeats** — jamais édité manuellement.
 
 ### Spec
@@ -75,7 +75,7 @@ status:
 | `heapFree` | heartbeat | RAM libre en octets |
 | `rssi` | heartbeat | Signal WiFi en dBm |
 | `chip` / `idfVersion` / `flashSize` / `ramSize` | GET /info | Capacités hardware — peuplées lors du premier contact OTA (`phasePreparing` / `phaseActivating`) |
-| `appPort` | GET /info | Port du service applicatif ESP (utilisé par l'EndpointSlice) |
+| `appPort` | GET /info | Port du service applicatif MCU (utilisé par l'EndpointSlice) |
 | `ready` | calculé | `true` ssi `state==running && otaValidated && heartbeat<10s` |
 | `lastHeartbeat` | heartbeat | Timestamp du dernier heartbeat reçu |
 
@@ -106,7 +106,7 @@ esp32-motor-left   running   2h    1.0.0     192.168.10.50
 
 ## McuDeployment
 
-Décrit un déploiement de firmware sur un device ESP. Piloté par une machine d'état.
+Décrit un déploiement de firmware sur un device MCU. Piloté par une machine d'état.
 
 ### Spec
 
@@ -235,7 +235,7 @@ Pour chaque McuNode avec une IP connue, le controller crée dans le même namesp
 | Ressource | Nom | Contenu |
 |-----------|-----|---------|
 | `Service` | `embewi-<node-name>` | Port `status.appPort` (défaut 8080), selectorless |
-| `EndpointSlice` | `embewi-<node-name>` | IP ESP, `ready=status.ready` |
+| `EndpointSlice` | `embewi-<node-name>` | IP Agent, `ready=status.ready` |
 
 Ces ressources ont le McuNode comme **owner** (OwnerReference) — elles sont
 supprimées automatiquement si le McuNode est supprimé.

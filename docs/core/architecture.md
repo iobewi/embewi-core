@@ -16,7 +16,7 @@ MCU Agent (HTTPS :443)                Embewi Core (Go)
 └─────────────────────┘              ├────────────────────────────────────┤
                                      │ McuNodeReconciler                  │
          OCI Registry                │  → Service selectorless            │
-┌─────────────────────┐              │  → EndpointSlice (IP ESP, ready)   │
+┌─────────────────────┐              │  → EndpointSlice (IP Agent, ready) │
 │ manifest + blob ────┼────────────►│                                    │
 └─────────────────────┘              ├────────────────────────────────────┤
                                      │ oci.Client                         │
