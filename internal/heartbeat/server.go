@@ -31,6 +31,16 @@ var wsUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+// wsReadDeadline / wsPingInterval : sans deadline, un client qui upgrade puis ne
+// parle plus jamais bloque ReadMessage() indéfiniment — fuite goroutine+socket
+// atteignable avant même l'authentification (slow-loris). Le ping périodique
+// maintient la deadline glissante tant que la connexion répond.
+const (
+	wsReadDeadline = 60 * time.Second
+	wsPingInterval = 20 * time.Second
+	wsPingTimeout  = 5 * time.Second
+)
+
 // validNodeStates reflète l'enum imposé par le CRD McuNode (spec.status.state) —
 // une valeur hors de cette liste ferait échouer tout le Status().Patch (pas
 // seulement le champ state), y compris l'IP et LastHeartbeat du même heartbeat.
@@ -324,16 +334,43 @@ func (s *Server) handleLogWS(w http.ResponseWriter, r *http.Request) {
 	logger := log.FromContext(ctx)
 	authenticated := false
 
+	_ = conn.SetReadDeadline(time.Now().Add(wsReadDeadline))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(wsReadDeadline))
+	})
+
+	// Ping périodique dans une goroutine dédiée : WriteControl/Close sont les
+	// seules méthodes gorilla documentées comme sûres en concurrence avec la
+	// boucle de lecture ci-dessous.
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		ticker := time.NewTicker(wsPingInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(wsPingTimeout)); err != nil {
+					_ = conn.Close() // débloque le ReadMessage() de la boucle principale
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+
 	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
-			// Déconnexion normale (EOF, close frame) — best-effort, pas d'erreur.
+			// Déconnexion normale (EOF, close frame) ou deadline expirée — best-effort, pas d'erreur.
 			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) &&
 				!websocket.IsUnexpectedCloseError(err) {
 				logger.Error(err, "WS logs : lecture frame échouée")
 			}
 			return
 		}
+		_ = conn.SetReadDeadline(time.Now().Add(wsReadDeadline))
 
 		var entry LogPayload
 		if json.Unmarshal(raw, &entry) != nil {
