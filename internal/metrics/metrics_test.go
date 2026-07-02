@@ -73,3 +73,25 @@ func TestUpdateFromHeartbeat_UptimeConversion(t *testing.T) {
 		t.Errorf("uptime_ms=120034 → uptime_seconds : got %v, want 120.034", got)
 	}
 }
+
+// TestRemoveNode_DeletesSeries vérifie qu'un node supprimé ne laisse pas ses
+// gauges exposées indéfiniment (fuite de cardinalité sur un fleet avec churn).
+func TestRemoveNode_DeletesSeries(t *testing.T) {
+	id := "node-remove"
+	metrics.UpdateFromHeartbeat(metrics.HeartbeatData{NodeID: id, Workload: "wl", Chip: "esp32s3", HeapFree: 12345})
+	if got := testutil.ToFloat64(metrics.HeapFreeBytes.With(lbl(id))); got != 12345 {
+		t.Fatalf("setup : got %.0f, want 12345", got)
+	}
+
+	metrics.RemoveNode(id)
+
+	// .With() recrée une série fraîche à zéro — une valeur non-nulle persistante
+	// signifierait que l'ancienne série n'a pas été supprimée.
+	if got := testutil.ToFloat64(metrics.HeapFreeBytes.With(lbl(id))); got != 0 {
+		t.Errorf("après RemoveNode : got %.0f, want 0 (série supprimée puis recréée à zéro)", got)
+	}
+}
+
+func TestRemoveNode_UnknownNode_NoOp(t *testing.T) {
+	metrics.RemoveNode("node-never-seen") // ne doit pas paniquer
+}

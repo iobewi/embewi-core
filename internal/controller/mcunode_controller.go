@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/embewi/core/api/v1alpha1"
+	"github.com/embewi/core/internal/metrics"
 )
 
 const (
@@ -28,6 +29,12 @@ const (
 
 	labelManagedBy = "embewi.io/managed-by"
 	labelNodeID    = "embewi.io/node-id"
+
+	// nodeMetricsFinalizer garantit metrics.RemoveNode() avant suppression effective
+	// du McuNode — spec.NodeID (clé des gauges Prometheus) n'est plus lisible une fois
+	// l'objet réellement supprimé, d'où le besoin d'intercepter via finalizer plutôt
+	// que sur le NotFound du prochain reconcile.
+	nodeMetricsFinalizer = "embewi.io/metrics-cleanup"
 )
 
 // McuNodeReconciler réconcilie les McuNode.
@@ -49,6 +56,22 @@ func (r *McuNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
+	}
+
+	if !node.DeletionTimestamp.IsZero() {
+		if controllerutil.ContainsFinalizer(&node, nodeMetricsFinalizer) {
+			metrics.RemoveNode(node.Spec.NodeID)
+			controllerutil.RemoveFinalizer(&node, nodeMetricsFinalizer)
+			if err := r.Update(ctx, &node); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+		return ctrl.Result{}, nil
+	}
+	if controllerutil.AddFinalizer(&node, nodeMetricsFinalizer) {
+		if err := r.Update(ctx, &node); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	heartbeatExpired := node.Status.LastHeartbeat == nil ||

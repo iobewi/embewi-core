@@ -5,8 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -14,9 +17,11 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/embewi/core/api/v1alpha1"
 	"github.com/embewi/core/internal/controller"
+	"github.com/embewi/core/internal/metrics"
 )
 
 func nodeScheme(t *testing.T) *runtime.Scheme {
@@ -201,5 +206,71 @@ func TestReconcile_RequeuesAfterTimeout(t *testing.T) {
 
 	if result.RequeueAfter <= 0 {
 		t.Errorf("RequeueAfter : got %v, attendu > 0 (timeout heartbeat)", result.RequeueAfter)
+	}
+}
+
+// TestReconcile_AddsMetricsFinalizer vérifie que le premier reconcile pose le
+// finalizer nécessaire au nettoyage des gauges Prometheus à la suppression.
+func TestReconcile_AddsMetricsFinalizer(t *testing.T) {
+	scheme := nodeScheme(t)
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-fin", Namespace: "embewi"},
+		Spec:       v1alpha1.McuNodeSpec{NodeID: "esp-fin-id"},
+	}
+
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	r := &controller.McuNodeReconciler{Client: fc, Scheme: scheme}
+	reconcileNode(t, r, node.Name, node.Namespace)
+
+	var updated v1alpha1.McuNode
+	fc.Get(context.Background(), types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, &updated) //nolint:errcheck
+	if !controllerutil.ContainsFinalizer(&updated, "embewi.io/metrics-cleanup") {
+		t.Error("finalizer embewi.io/metrics-cleanup non ajouté au premier reconcile")
+	}
+}
+
+// TestReconcile_Deletion_CleansUpMetrics vérifie que la suppression d'un McuNode
+// nettoie ses gauges Prometheus (via le finalizer) avant que l'objet disparaisse —
+// sans ça, les séries d'un device décommissionné restent exposées indéfiniment.
+func TestReconcile_Deletion_CleansUpMetrics(t *testing.T) {
+	scheme := nodeScheme(t)
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-del", Namespace: "embewi"},
+		Spec:       v1alpha1.McuNodeSpec{NodeID: "esp-del-id"},
+	}
+
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	r := &controller.McuNodeReconciler{Client: fc, Scheme: scheme}
+	reconcileNode(t, r, node.Name, node.Namespace) // pose le finalizer
+
+	lbl := prometheus.Labels{"node_id": "esp-del-id", "workload": "wl", "chip": "esp32s3"}
+	metrics.UpdateFromHeartbeat(metrics.HeartbeatData{NodeID: "esp-del-id", Workload: "wl", Chip: "esp32s3", HeapFree: 999})
+	if got := testutil.ToFloat64(metrics.HeapFreeBytes.With(lbl)); got != 999 {
+		t.Fatalf("setup : got %.0f, want 999", got)
+	}
+
+	if err := fc.Delete(context.Background(), node); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	reconcileNode(t, r, node.Name, node.Namespace) // détecte DeletionTimestamp → cleanup + retire le finalizer
+
+	var after v1alpha1.McuNode
+	err := fc.Get(context.Background(), types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, &after)
+	if !apierrors.IsNotFound(err) {
+		t.Errorf("l'objet devrait être supprimé une fois le finalizer retiré, got err=%v", err)
+	}
+
+	if got := testutil.ToFloat64(metrics.HeapFreeBytes.With(lbl)); got != 0 {
+		t.Errorf("gauge non nettoyée après suppression : got %.0f, want 0", got)
 	}
 }

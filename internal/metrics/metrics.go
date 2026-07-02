@@ -99,6 +99,20 @@ func deleteLabels(l prometheus.Labels) {
 	OtaValidated.Delete(l)
 }
 
+// RemoveNode supprime les dernières séries connues pour ce node_id — à appeler
+// quand un McuNode est supprimé (device décommissionné). Sans ça, deleteLabels
+// n'est déclenché que par un changement de workload/chip sur un node vivant :
+// un node supprimé garde ses 8 séries exposées indéfiniment sur /metrics
+// (cardinalité non bornée sur un fleet avec du churn de devices).
+func RemoveNode(nodeID string) {
+	labelsMu.Lock()
+	defer labelsMu.Unlock()
+	if old, exists := prevLabels[nodeID]; exists {
+		deleteLabels(old)
+		delete(prevLabels, nodeID)
+	}
+}
+
 // UpdateFromHeartbeat met à jour toutes les gauges mcunode_* (§8b contrat).
 // Quand deployment_id ou chip change pour un node, les anciennes séries sont supprimées
 // pour éviter la fuite de cardinalité Prometheus.
