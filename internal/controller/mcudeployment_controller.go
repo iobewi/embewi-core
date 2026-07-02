@@ -144,6 +144,10 @@ func (r *McuDeploymentReconciler) phaseBinding(ctx context.Context, dep *v1alpha
 }
 
 // checkNotBusy vérifie qu'aucun autre McuDeployment n'est déjà bindé sur ce node.
+// Deployed reste bloquant : le workload est actif sur le device, reconcileDeployed
+// continue de le piloter (§7 — 1 McuDeployment → exactement 1 McuNode). Seul Failed
+// libère le node : un déploiement échoué ne touche plus le device et peut être retenté
+// via un nouvel objet sans supprimer l'ancien.
 func (r *McuDeploymentReconciler) checkNotBusy(ctx context.Context, dep *v1alpha1.McuDeployment, nodeName string) error {
 	var list v1alpha1.McuDeploymentList
 	if err := r.List(ctx, &list, client.InNamespace(dep.Namespace)); err != nil {
@@ -153,9 +157,7 @@ func (r *McuDeploymentReconciler) checkNotBusy(ctx context.Context, dep *v1alpha
 		if d.Name == dep.Name {
 			continue
 		}
-		if d.Status.BoundNode == nodeName &&
-			d.Status.Phase != v1alpha1.PhaseDeployed &&
-			d.Status.Phase != v1alpha1.PhaseFailed {
+		if d.Status.BoundNode == nodeName && d.Status.Phase != v1alpha1.PhaseFailed {
 			return fmt.Errorf("node %q déjà utilisé par McuDeployment %q", nodeName, d.Name)
 		}
 	}
@@ -700,16 +702,25 @@ func (r *McuDeploymentReconciler) reconcileDeployed(ctx context.Context, dep *v1
 
 	heartbeatExpired := node.Status.LastHeartbeat == nil ||
 		time.Since(node.Status.LastHeartbeat.Time) > HeartbeatTimeout
+	degraded := node.Status.State == "degraded" || node.Status.State == "rollback" || node.Status.State == "failed"
 
 	patch := client.MergeFrom(dep.DeepCopy())
-	if heartbeatExpired {
+	switch {
+	case heartbeatExpired:
 		apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
 			Type:    "Available",
 			Status:  metav1.ConditionFalse,
 			Reason:  "HeartbeatTimeout",
 			Message: fmt.Sprintf("aucun heartbeat depuis plus de %v", HeartbeatTimeout),
 		})
-	} else {
+	case degraded:
+		apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
+			Type:    "Available",
+			Status:  metav1.ConditionFalse,
+			Reason:  "DeviceDegraded",
+			Message: fmt.Sprintf("device state=%s", node.Status.State),
+		})
+	default:
 		apimeta.SetStatusCondition(&dep.Status.Conditions, metav1.Condition{
 			Type:    "Available",
 			Status:  metav1.ConditionTrue,

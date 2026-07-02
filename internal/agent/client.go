@@ -46,10 +46,18 @@ func New(ip, token string) *Client {
 	}
 }
 
-func (c *Client) doWith(hc *http.Client, method, path string, body io.Reader, extraHeaders map[string]string) (*http.Response, error) {
+// doWith exécute la requête. contentLength >= 0 force req.ContentLength — requis
+// pour tout body dont le type concret n'est pas reconnu par http.NewRequest
+// (*bytes.Reader/*bytes.Buffer/*strings.Reader) : sans ça, Go bascule en
+// Transfer-Encoding: chunked et ignore silencieusement un header Content-Length
+// posé à la main (net/http ne l'écrit jamais depuis la map Header côté requête).
+func (c *Client) doWith(hc *http.Client, method, path string, body io.Reader, contentLength int64, extraHeaders map[string]string) (*http.Response, error) {
 	req, err := http.NewRequest(method, c.baseURL+apiPrefix+path, body)
 	if err != nil {
 		return nil, err
+	}
+	if contentLength >= 0 {
+		req.ContentLength = contentLength
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	for k, v := range extraHeaders {
@@ -59,7 +67,7 @@ func (c *Client) doWith(hc *http.Client, method, path string, body io.Reader, ex
 }
 
 func (c *Client) do(method, path string, body io.Reader, extraHeaders map[string]string) (*http.Response, error) {
-	return c.doWith(c.http, method, path, body, extraHeaders)
+	return c.doWith(c.http, method, path, body, -1, extraHeaders)
 }
 
 // InfoResponse correspond au GET /v1alpha1/info.
@@ -170,9 +178,8 @@ func (e *OTAWriteError) Error() string {
 // Retourne *OTAWriteError pour les échecs métier (§4b) afin que le controller
 // puisse émettre le bon Event K8s.
 func (c *Client) OTAWrite(deploymentID, digest string, size int64, firmware io.Reader) error {
-	resp, err := c.doWith(c.httpStream, http.MethodPut, "/ota/write", firmware, map[string]string{
+	resp, err := c.doWith(c.httpStream, http.MethodPut, "/ota/write", firmware, size, map[string]string{
 		"Content-Type":           "application/octet-stream",
-		"Content-Length":         fmt.Sprintf("%d", size),
 		"Content-Range":          fmt.Sprintf("bytes 0-%d/%d", size-1, size),
 		"X-Embewi-Deployment-Id": deploymentID,
 		"X-Embewi-Digest":        digest,

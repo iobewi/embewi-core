@@ -31,6 +31,19 @@ var wsUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+// validNodeStates reflète l'enum imposé par le CRD McuNode (spec.status.state) —
+// une valeur hors de cette liste ferait échouer tout le Status().Patch (pas
+// seulement le champ state), y compris l'IP et LastHeartbeat du même heartbeat.
+var validNodeStates = map[string]bool{
+	"booting":        true,
+	"pending_verify": true,
+	"running":        true,
+	"degraded":       true,
+	"rollback":       true,
+	"failed":         true,
+	"offline":        true,
+}
+
 // HeartbeatPayload correspond au corps POST /v1alpha1/heartbeat (contrat §5).
 // Champs requis : node_id, ip, ts, state, ota_validated, config_generation.
 type HeartbeatPayload struct {
@@ -183,6 +196,13 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	// Validation Bearer token — comparaison temps-constant (§1 contrat).
 	if !s.validateToken(r.Context(), r, node) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// state hors enum CRD → tout le Status().Patch échouerait (pas seulement ce champ).
+	if !validNodeStates[hb.State] {
+		logger.Error(nil, "heartbeat : state hors enum CRD, ignoré")
+		http.Error(w, "invalid state", http.StatusBadRequest)
 		return
 	}
 

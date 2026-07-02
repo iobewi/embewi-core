@@ -109,7 +109,7 @@ func TestOTAWrite_RangeMismatch_HTTP416(t *testing.T) {
 		w.Write([]byte(`{"error":"range_mismatch","written":512}`)) //nolint:errcheck
 	})
 
-	err := cli.OTAWrite("deploy-1", "sha256:abc", 1024, strings.NewReader("data"))
+	err := cli.OTAWrite("deploy-1", "sha256:abc", 4, strings.NewReader("data"))
 	var writeErr *agent.OTAWriteError
 	if !errors.As(err, &writeErr) {
 		t.Fatalf("attendu *OTAWriteError, got %T : %v", err, err)
