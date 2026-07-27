@@ -248,6 +248,7 @@ Variables d'environnement :
 | `OCI_REGISTRY_USER` | Identifiant Basic auth (optionnel) |
 | `OCI_REGISTRY_PASS` | Mot de passe Basic auth (optionnel) |
 | `OCI_INSECURE_TLS`  | `true` → skip TLS verify (registre local auto-signé) |
+| `OCI_TRUSTED_PUBLIC_KEY` | Clé publique Ed25519 (base64, 32 octets) → active la vérification de signature des images firmware (optionnel) |
 
 Pour les registres `localhost` ou `127.x.x.x`, HTTP est utilisé automatiquement.
 

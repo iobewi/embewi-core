@@ -33,8 +33,16 @@ type McuNodeSpec struct {
 	NodeID string `json:"nodeId"`
 
 	// TokenRef référence le Secret K8s portant le token Bearer de ce device (§1 contrat).
-	// Le Secret doit contenir une clé unique dont la valeur est le token Bearer brut.
+	// Le Secret doit contenir data["token"] = <bearer brut>.
 	// Exemple : Secret "embewi-a1b2c3-token" → data["token"] = <bearer>.
+	//
+	// Rotation sans coupure (§4 contrat) : pour faire tourner le token, écrire en
+	// une seule opération data["token"]=newToken ET data["previousToken"]=oldToken.
+	// Le Core rejoue POST /token avec previousToken tant que le device n'a pas
+	// confirmé newToken par heartbeat ; previousToken est alors effacé
+	// automatiquement. Ne pas écrire data["token"] seul pendant une rotation — sans
+	// previousToken, un crash Core juste après l'écriture du Secret rend le device
+	// injoignable en inbound (seul recours : portail captif).
 	TokenRef SecretRef `json:"tokenRef"`
 }
 
@@ -58,12 +66,12 @@ type McuNodeStatus struct {
 	OtaValidated bool `json:"otaValidated"`
 
 	// Métriques temps réel.
-	HeapFree        int     `json:"heapFree,omitempty"`
-	RSSI            int     `json:"rssi,omitempty"`
-	UptimeMs        int64   `json:"uptimeMs,omitempty"`
-	ConfigGeneration int    `json:"configGeneration,omitempty"`
-	TempCelsius     float64 `json:"tempCelsius,omitempty"`
-	TaskHwmMin      int     `json:"taskHwmMin,omitempty"`
+	HeapFree         int     `json:"heapFree,omitempty"`
+	RSSI             int     `json:"rssi,omitempty"`
+	UptimeMs         int64   `json:"uptimeMs,omitempty"`
+	ConfigGeneration int     `json:"configGeneration,omitempty"`
+	TempCelsius      float64 `json:"tempCelsius,omitempty"`
+	TaskHwmMin       int     `json:"taskHwmMin,omitempty"`
 
 	// Capacités hardware (peuplées depuis GET /info au premier contact).
 	Chip       string `json:"chip,omitempty"`
@@ -71,6 +79,10 @@ type McuNodeStatus struct {
 	FlashSize  int64  `json:"flashSize,omitempty"`
 	RAMSize    int64  `json:"ramSize,omitempty"`
 	AppPort    int    `json:"appPort,omitempty"`
+
+	// ApiVersion : version de protocole négociée avec le device (contrat §4,
+	// découverte de version d'API). Vide tant qu'aucun GET /info n'a réussi.
+	ApiVersion string `json:"apiVersion,omitempty"`
 
 	// Ready pilote EndpointSlice.ready (§8 contrat).
 	// true ssi state==running && ota_validated==true && heartbeat récent.

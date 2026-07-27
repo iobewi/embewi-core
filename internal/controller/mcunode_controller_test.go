@@ -2,6 +2,10 @@ package controller_test
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -184,6 +189,113 @@ func TestReconcile_WithIP_CreatesServiceAndEndpointSlice(t *testing.T) {
 	}
 	if eps.Endpoints[0].Addresses[0] != "10.0.0.5" {
 		t.Errorf("EndpointSlice address : got %q, want %q", eps.Endpoints[0].Addresses[0], "10.0.0.5")
+	}
+}
+
+// TestReconcile_TokenRotation_ReplaysUntilConfirmed vérifie que le reconciler rejoue
+// POST /token tant que McuSecret.previousToken est présent (§4 contrat, rétention).
+func TestReconcile_TokenRotation_ReplaysUntilConfirmed(t *testing.T) {
+	scheme := nodeScheme(t)
+
+	var gotAuth, gotBody string
+	device := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1alpha1/token" {
+			t.Errorf("chemin inattendu : %s", r.URL.Path)
+		}
+		gotAuth = r.Header.Get("Authorization")
+		body, _ := io.ReadAll(r.Body)
+		gotBody = string(body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer device.Close()
+
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-rot", Namespace: "embewi"},
+		Spec: v1alpha1.McuNodeSpec{
+			NodeID:   "esp-rot-id",
+			TokenRef: v1alpha1.SecretRef{Name: "esp-rot-token"},
+		},
+		Status: v1alpha1.McuNodeStatus{IP: device.Listener.Addr().String()},
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-rot-token", Namespace: "embewi"},
+		Data: map[string][]byte{
+			"token":         []byte("new-token"),
+			"previousToken": []byte("old-token"),
+		},
+	}
+
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node, secret).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	rec := record.NewFakeRecorder(10)
+	r := &controller.McuNodeReconciler{Client: fc, Scheme: scheme, Recorder: rec}
+	reconcileNode(t, r, node.Name, node.Namespace)
+
+	if gotAuth != "Bearer old-token" {
+		t.Errorf("Authorization : got %q, want Bearer old-token", gotAuth)
+	}
+	if !strings.Contains(gotBody, "new-token") {
+		t.Errorf("corps POST /token : got %q, doit contenir new-token", gotBody)
+	}
+
+	select {
+	case ev := <-rec.Events:
+		if !strings.Contains(ev, "TokenRotationApplied") {
+			t.Errorf("event : got %q, want TokenRotationApplied", ev)
+		}
+	default:
+		t.Error("aucun event TokenRotationApplied émis")
+	}
+
+	// previousToken n'est PAS effacé par le reconciler — seule la confirmation par
+	// heartbeat (internal/heartbeat/server.go) l'efface. Rejoué tant que présent.
+	var sec corev1.Secret
+	fc.Get(context.Background(), types.NamespacedName{Name: "esp-rot-token", Namespace: "embewi"}, &sec) //nolint:errcheck
+	if string(sec.Data["previousToken"]) != "old-token" {
+		t.Error("previousToken : ne doit être effacé que par la confirmation heartbeat, pas par le reconciler")
+	}
+}
+
+// TestReconcile_TokenRotation_NoPreviousToken_NoCall vérifie qu'en dehors d'une
+// rotation (previousToken absent), le reconciler n'appelle jamais l'agent.
+func TestReconcile_TokenRotation_NoPreviousToken_NoCall(t *testing.T) {
+	scheme := nodeScheme(t)
+
+	called := false
+	device := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer device.Close()
+
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-norot", Namespace: "embewi"},
+		Spec: v1alpha1.McuNodeSpec{
+			NodeID:   "esp-norot-id",
+			TokenRef: v1alpha1.SecretRef{Name: "esp-norot-token"},
+		},
+		Status: v1alpha1.McuNodeStatus{IP: device.Listener.Addr().String()},
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-norot-token", Namespace: "embewi"},
+		Data:       map[string][]byte{"token": []byte("stable-token")},
+	}
+
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node, secret).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	r := &controller.McuNodeReconciler{Client: fc, Scheme: scheme}
+	reconcileNode(t, r, node.Name, node.Namespace)
+
+	if called {
+		t.Error("POST /token appelé alors qu'aucune rotation n'est en cours (previousToken absent)")
 	}
 }
 

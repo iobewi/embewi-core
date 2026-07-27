@@ -4,21 +4,24 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
-	discoveryv1 "k8s.io/api/discovery/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/embewi/core/api/v1alpha1"
+	"github.com/embewi/core/internal/agent"
 	"github.com/embewi/core/internal/metrics"
 )
 
@@ -44,7 +47,8 @@ const (
 //   - Mettre à jour les conditions Provisioned + Ready (§8a contrat)
 type McuNodeReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder // émet TokenRotation{Applied,Failed} (§4 contrat) ; nil = pas d'Events
 }
 
 func (r *McuNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -87,7 +91,12 @@ func (r *McuNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	prevReady := node.Status.Ready
 	prevState := node.Status.State
 
-	patch := client.MergeFrom(node.DeepCopy())
+	// Verrou optimiste : le heartbeat POST (internal/heartbeat/server.go) patch le
+	// même McuNode.Status de façon concurrente. Sans resourceVersion, un reconcile
+	// basé sur une lecture pas encore rafraîchie peut écraser un heartbeat tout
+	// juste arrivé (state/ready remis à "offline"/false). Avec le verrou, ce patch
+	// échoue en conflit — controller-runtime réenqueue automatiquement l'erreur.
+	patch := client.MergeFromWithOptions(node.DeepCopy(), client.MergeFromWithOptimisticLock{})
 	node.Status.Ready = wantReady
 	node.Status.State = wantState
 
@@ -132,6 +141,9 @@ func (r *McuNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		if err := r.reconcileEndpointSlice(ctx, &node); err != nil {
 			return ctrl.Result{}, fmt.Errorf("reconcile endpointslice: %w", err)
+		}
+		if err := r.reconcileTokenRotation(ctx, &node); err != nil {
+			return ctrl.Result{}, fmt.Errorf("reconcile token rotation: %w", err)
 		}
 	}
 
@@ -189,9 +201,9 @@ func (r *McuNodeReconciler) reconcileService(ctx context.Context, node *v1alpha1
 // reconcileEndpointSlice met à jour l'EndpointSlice du Service avec l'IP et ready.
 func (r *McuNodeReconciler) reconcileEndpointSlice(ctx context.Context, node *v1alpha1.McuNode) error {
 	sliceName := "embewi-" + node.Name
-	svcName   := "embewi-" + node.Name
-	ready     := node.Status.Ready
-	appPort   := int32(8080)
+	svcName := "embewi-" + node.Name
+	ready := node.Status.Ready
+	appPort := int32(8080)
 	if node.Status.AppPort > 0 {
 		appPort = int32(node.Status.AppPort)
 	}
@@ -203,8 +215,8 @@ func (r *McuNodeReconciler) reconcileEndpointSlice(ctx context.Context, node *v1
 			Namespace: node.Namespace,
 			Labels: map[string]string{
 				"kubernetes.io/service-name": svcName,
-				labelManagedBy:              "embewi-controller",
-				labelNodeID:                 node.Spec.NodeID,
+				labelManagedBy:               "embewi-controller",
+				labelNodeID:                  node.Spec.NodeID,
 			},
 		},
 		AddressType: discoveryv1.AddressTypeIPv4,
@@ -240,6 +252,59 @@ func (r *McuNodeReconciler) reconcileEndpointSlice(ctx context.Context, node *v1
 		return fmt.Errorf("SetControllerReference EndpointSlice existant: %w", err)
 	}
 	return r.Patch(ctx, &existing, patch)
+}
+
+// reconcileTokenRotation rejoue POST /token tant qu'une rotation reste non confirmée
+// (§4 contrat). Déclenchement : l'opérateur (kubectl/GitOps) écrit dans le Secret
+// référencé par node.Spec.TokenRef, EN MÊME TEMPS, data["token"]=newToken et
+// data["previousToken"]=oldToken (rétention, une seule écriture atomique — cf.
+// contrat §4 "protocole de rotation sans coupure"). Tant que previousToken est
+// présent, le device n'a pas confirmé newToken : soit il ne l'a jamais reçu (POST
+// /token pas encore tenté ou en échec), soit sa réponse au précédent essai s'est
+// perdue avant que le Core ne puisse le constater — dans les deux cas, rejouer
+// POST /token avec previousToken est sans risque (idempotent côté device : NVS
+// commitée avant réponse, §4). La confirmation (et l'effacement de previousToken)
+// se fait côté heartbeat, cf. clearPreviousToken.
+func (r *McuNodeReconciler) reconcileTokenRotation(ctx context.Context, node *v1alpha1.McuNode) error {
+	if node.Spec.TokenRef.Name == "" {
+		return nil // Secret centralisé (legacy) : pas de support de rotation.
+	}
+	secretNS := node.Spec.TokenRef.Namespace
+	if secretNS == "" {
+		secretNS = node.Namespace
+	}
+	var secret corev1.Secret
+	if err := r.Get(ctx, client.ObjectKey{Name: node.Spec.TokenRef.Name, Namespace: secretNS}, &secret); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	previous := strings.TrimSpace(string(secret.Data["previousToken"]))
+	if previous == "" {
+		return nil // pas de rotation en cours
+	}
+	newToken := strings.TrimSpace(string(secret.Data["token"]))
+	if newToken == "" {
+		return nil // secret incohérent (previousToken sans token) : rien à jouer
+	}
+
+	logger := log.FromContext(ctx).WithValues("node", node.Spec.NodeID)
+	if err := agent.New(node.Status.IP, previous).RotateToken(newToken); err != nil {
+		// Pas fatal : le device peut être temporairement injoignable, ou avoir déjà
+		// confirmé newToken entre-temps (previousToken pas encore effacé) — dans ce
+		// dernier cas ce POST échoue en 401 côté device, sans conséquence : le
+		// prochain heartbeat authentifié en newToken effacera previousToken.
+		logger.Info("rotation token : POST /token a échoué, nouvelle tentative au prochain reconcile", "error", err.Error())
+		if r.Recorder != nil {
+			r.Recorder.Eventf(node, corev1.EventTypeWarning, "TokenRotationFailed",
+				"POST /token a échoué : %v (nouvelle tentative au prochain reconcile)", err)
+		}
+		return nil
+	}
+	logger.Info("rotation token : POST /token accepté par le device, confirmation attendue par heartbeat")
+	if r.Recorder != nil {
+		r.Recorder.Event(node, corev1.EventTypeNormal, "TokenRotationApplied",
+			"POST /token accepté par le device ; confirmation attendue par heartbeat (newToken)")
+	}
+	return nil
 }
 
 func (r *McuNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {

@@ -22,6 +22,7 @@
 | `OCI_REGISTRY_USER` | Identifiant Basic auth pour le registre OCI |
 | `OCI_REGISTRY_PASS` | Mot de passe Basic auth |
 | `OCI_INSECURE_TLS` | `true` → skip vérification TLS (registre auto-signé) |
+| `OCI_TRUSTED_PUBLIC_KEY` | Clé publique Ed25519 (base64, 32 octets) — active la vérification de signature des images firmware (§1/§9 contrat). Absente = désactivée |
 | `KUBECONFIG` | Chemin kubeconfig (hors cluster) — défaut `~/.kube/config` |
 
 ## Constantes internes

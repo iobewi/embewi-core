@@ -72,6 +72,8 @@ spec:
                   format: int64
                 appPort:
                   type: integer
+                apiVersion:
+                  type: string
                 ready:
                   type: boolean
                 lastHeartbeat:

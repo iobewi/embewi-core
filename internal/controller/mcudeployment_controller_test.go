@@ -2,6 +2,10 @@ package controller_test
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +20,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/embewi/core/api/v1alpha1"
+	"github.com/embewi/core/internal/agent"
 	"github.com/embewi/core/internal/controller"
+	"github.com/embewi/core/internal/oci"
 )
 
 func deployScheme(t *testing.T) *runtime.Scheme {
@@ -329,5 +335,458 @@ func TestPhaseConfirming_Timeout(t *testing.T) {
 	fc.Get(context.Background(), types.NamespacedName{Name: dep.Name, Namespace: dep.Namespace}, &updated) //nolint:errcheck
 	if updated.Status.Phase != v1alpha1.PhaseFailed {
 		t.Errorf("Phase après timeout : got %q, want Failed", updated.Status.Phase)
+	}
+}
+
+// preparingSetup construit un McuNode+Secret+McuDeployment en phase Preparing,
+// prêts pour appeler GET /info sur le serveur TLS fourni (contrat §4, négociation
+// de version d'API via api_versions).
+func preparingSetup(t *testing.T, scheme *runtime.Scheme, serverURL string) (*fake.ClientBuilder, *v1alpha1.McuNode, *v1alpha1.McuDeployment) {
+	t.Helper()
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "target-node", Namespace: "embewi"},
+		Spec:       v1alpha1.McuNodeSpec{NodeID: "esp-1"},
+		Status:     v1alpha1.McuNodeStatus{State: "running", IP: strings.TrimPrefix(serverURL, "https://")},
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "embewi-tokens", Namespace: "embewi"},
+		Data:       map[string][]byte{"esp-1": []byte("test-token")},
+	}
+	dep := &v1alpha1.McuDeployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "prep-dep", Namespace: "embewi"},
+		Spec:       v1alpha1.McuDeploymentSpec{NodeName: "target-node", Firmware: v1alpha1.FirmwareSpec{Image: "reg/fw:v1"}},
+	}
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(dep, node, secret).
+		WithStatusSubresource(&v1alpha1.McuDeployment{}, &v1alpha1.McuNode{}), node, dep
+}
+
+func TestPhasePreparing_UnsupportedAPIVersion_Fails(t *testing.T) {
+	scheme := deployScheme(t)
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		info := agent.InfoResponse{NodeID: "esp-1", ApiVersions: []string{"v2beta1"}}
+		info.Staged.State = "none"
+		json.NewEncoder(w).Encode(info)
+	}))
+	defer ts.Close()
+
+	builder, node, dep := preparingSetup(t, scheme, ts.URL)
+	fc := builder.Build()
+
+	depPatch := dep.DeepCopy()
+	depPatch.Status.Phase = v1alpha1.PhasePreparing
+	depPatch.Status.BoundNode = node.Name
+	depPatch.Status.DeploymentID = "fw-v1"
+	depPatch.Status.Digest = "sha256:abc"
+	depPatch.Status.Size = 1024
+	fc.Status().Update(context.Background(), depPatch) //nolint:errcheck
+
+	r := &controller.McuDeploymentReconciler{
+		Client:      fc,
+		Scheme:      scheme,
+		TokenSecret: "embewi-tokens",
+		Recorder:    record.NewFakeRecorder(10),
+	}
+
+	reconcile(t, r, dep.Name, dep.Namespace)
+
+	var updatedDep v1alpha1.McuDeployment
+	fc.Get(context.Background(), types.NamespacedName{Name: dep.Name, Namespace: dep.Namespace}, &updatedDep) //nolint:errcheck
+	if updatedDep.Status.Phase != v1alpha1.PhaseFailed {
+		t.Fatalf("Phase : got %q, want Failed", updatedDep.Status.Phase)
+	}
+	if !strings.Contains(updatedDep.Status.Message, "APIVersionUnsupported") {
+		t.Errorf("Message : got %q, want mention de APIVersionUnsupported", updatedDep.Status.Message)
+	}
+
+	var updatedNode v1alpha1.McuNode
+	fc.Get(context.Background(), types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, &updatedNode) //nolint:errcheck
+	if updatedNode.Status.ApiVersion != "" {
+		t.Errorf("McuNode.Status.ApiVersion : got %q, want vide (négociation échouée)", updatedNode.Status.ApiVersion)
+	}
+}
+
+func TestPhasePreparing_APIVersionAbsent_NegotiatesV1Alpha1(t *testing.T) {
+	scheme := deployScheme(t)
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1alpha1/info":
+			// api_versions absent → v1alpha1 supposé (device antérieur à la révision du contrat).
+			info := agent.InfoResponse{NodeID: "esp-1"}
+			info.Staged.State = "none"
+			json.NewEncoder(w).Encode(info)
+		case "/v1alpha1/ota/prepare":
+			json.NewEncoder(w).Encode(agent.PrepareResponse{Accepted: true, TargetSlot: "ota_1"})
+		}
+	}))
+	defer ts.Close()
+
+	builder, node, dep := preparingSetup(t, scheme, ts.URL)
+	fc := builder.Build()
+
+	depPatch := dep.DeepCopy()
+	depPatch.Status.Phase = v1alpha1.PhasePreparing
+	depPatch.Status.BoundNode = node.Name
+	depPatch.Status.DeploymentID = "fw-v1"
+	depPatch.Status.Digest = "sha256:abc"
+	depPatch.Status.Size = 1024
+	fc.Status().Update(context.Background(), depPatch) //nolint:errcheck
+
+	r := &controller.McuDeploymentReconciler{
+		Client:      fc,
+		Scheme:      scheme,
+		TokenSecret: "embewi-tokens",
+		Recorder:    record.NewFakeRecorder(10),
+	}
+
+	reconcile(t, r, dep.Name, dep.Namespace)
+
+	var updatedDep v1alpha1.McuDeployment
+	fc.Get(context.Background(), types.NamespacedName{Name: dep.Name, Namespace: dep.Namespace}, &updatedDep) //nolint:errcheck
+	if updatedDep.Status.Phase != v1alpha1.PhaseWriting {
+		t.Fatalf("Phase : got %q, want Writing (message=%q)", updatedDep.Status.Phase, updatedDep.Status.Message)
+	}
+
+	var updatedNode v1alpha1.McuNode
+	fc.Get(context.Background(), types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, &updatedNode) //nolint:errcheck
+	if updatedNode.Status.ApiVersion != agent.SupportedAPIVersion {
+		t.Errorf("McuNode.Status.ApiVersion : got %q, want %q", updatedNode.Status.ApiVersion, agent.SupportedAPIVersion)
+	}
+}
+
+// TestPhasePreparing_ConfigMapMissing_FailsWithConfigMapNotFound vérifie l'écart
+// d'audit 2026-07-23 : un McuConfigMap absent doit produire le reason K8s
+// ConfigMapNotFound (§4b contrat), distinct de ConfigInvalid (valeur invalide).
+func TestPhasePreparing_ConfigMapMissing_FailsWithConfigMapNotFound(t *testing.T) {
+	scheme := deployScheme(t)
+	builder, node, dep := preparingSetup(t, scheme, "https://192.0.2.1")
+	dep.Spec.ConfigMapRef = "does-not-exist"
+	builder = fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(dep, node, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "embewi-tokens", Namespace: "embewi"},
+			Data:       map[string][]byte{"esp-1": []byte("test-token")},
+		}).
+		WithStatusSubresource(&v1alpha1.McuDeployment{}, &v1alpha1.McuNode{})
+	fc := builder.Build()
+
+	depPatch := dep.DeepCopy()
+	depPatch.Status.Phase = v1alpha1.PhasePreparing
+	depPatch.Status.BoundNode = node.Name
+	depPatch.Status.DeploymentID = "fw-v1"
+	depPatch.Status.Digest = "sha256:abc"
+	depPatch.Status.Size = 1024
+	fc.Status().Update(context.Background(), depPatch) //nolint:errcheck
+
+	r := &controller.McuDeploymentReconciler{
+		Client:      fc,
+		Scheme:      scheme,
+		TokenSecret: "embewi-tokens",
+		Recorder:    record.NewFakeRecorder(10),
+	}
+
+	reconcile(t, r, dep.Name, dep.Namespace)
+
+	var updatedDep v1alpha1.McuDeployment
+	fc.Get(context.Background(), types.NamespacedName{Name: dep.Name, Namespace: dep.Namespace}, &updatedDep) //nolint:errcheck
+	if updatedDep.Status.Phase != v1alpha1.PhaseFailed {
+		t.Fatalf("Phase : got %q, want Failed", updatedDep.Status.Phase)
+	}
+	if !strings.Contains(updatedDep.Status.Message, "[ConfigMapNotFound]") {
+		t.Errorf("Message : got %q, want reason ConfigMapNotFound", updatedDep.Status.Message)
+	}
+}
+
+// TestPhasePreparing_ConfigMapInvalidValue_FailsWithConfigInvalid vérifie que le reason
+// générique ConfigInvalid reste utilisé pour les erreurs de valeur (CM présent mais
+// non conforme aux limites NVS §4a), par contraste avec ConfigMapNotFound ci-dessus.
+func TestPhasePreparing_ConfigMapInvalidValue_FailsWithConfigInvalid(t *testing.T) {
+	scheme := deployScheme(t)
+	_, node, dep := preparingSetup(t, scheme, "https://192.0.2.1")
+	dep.Spec.ConfigMapRef = "bad-cm"
+	cm := &v1alpha1.McuConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: "bad-cm", Namespace: "embewi"},
+		Data:       map[string]string{"gpio_button_way_too_long_key": "9"},
+	}
+	fc := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(dep, node, cm, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "embewi-tokens", Namespace: "embewi"},
+			Data:       map[string][]byte{"esp-1": []byte("test-token")},
+		}).
+		WithStatusSubresource(&v1alpha1.McuDeployment{}, &v1alpha1.McuNode{}).
+		Build()
+
+	depPatch := dep.DeepCopy()
+	depPatch.Status.Phase = v1alpha1.PhasePreparing
+	depPatch.Status.BoundNode = node.Name
+	depPatch.Status.DeploymentID = "fw-v1"
+	depPatch.Status.Digest = "sha256:abc"
+	depPatch.Status.Size = 1024
+	fc.Status().Update(context.Background(), depPatch) //nolint:errcheck
+
+	r := &controller.McuDeploymentReconciler{
+		Client:      fc,
+		Scheme:      scheme,
+		TokenSecret: "embewi-tokens",
+		Recorder:    record.NewFakeRecorder(10),
+	}
+
+	reconcile(t, r, dep.Name, dep.Namespace)
+
+	var updatedDep v1alpha1.McuDeployment
+	fc.Get(context.Background(), types.NamespacedName{Name: dep.Name, Namespace: dep.Namespace}, &updatedDep) //nolint:errcheck
+	if updatedDep.Status.Phase != v1alpha1.PhaseFailed {
+		t.Fatalf("Phase : got %q, want Failed", updatedDep.Status.Phase)
+	}
+	if !strings.Contains(updatedDep.Status.Message, "[ConfigInvalid]") {
+		t.Errorf("Message : got %q, want reason ConfigInvalid", updatedDep.Status.Message)
+	}
+}
+
+// deployedConfigSetup construit un McuNode+Secret+McuConfigMap+McuDeployment déjà en
+// phase Deployed, prêts à exercer reconcileConfigOnly (§6 contrat — idempotence config)
+// contre le serveur TLS fourni.
+func deployedConfigSetup(t *testing.T, scheme *runtime.Scheme, serverURL string, cmData map[string]string) (*fake.ClientBuilder, *v1alpha1.McuNode, *v1alpha1.McuDeployment) {
+	t.Helper()
+	now := metav1.Now()
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "target-node", Namespace: "embewi"},
+		Spec:       v1alpha1.McuNodeSpec{NodeID: "esp-1"},
+		Status: v1alpha1.McuNodeStatus{
+			State:         "running",
+			IP:            strings.TrimPrefix(serverURL, "https://"),
+			LastHeartbeat: &now,
+		},
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "embewi-tokens", Namespace: "embewi"},
+		Data:       map[string][]byte{"esp-1": []byte("test-token")},
+	}
+	cm := &v1alpha1.McuConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: "gpio-cm", Namespace: "embewi"},
+		Data:       cmData,
+	}
+	dep := &v1alpha1.McuDeployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "deployed-dep", Namespace: "embewi"},
+		Spec: v1alpha1.McuDeploymentSpec{
+			NodeName:     "target-node",
+			Firmware:     v1alpha1.FirmwareSpec{Image: "reg/fw:v1"},
+			ConfigMapRef: "gpio-cm",
+		},
+	}
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(dep, node, secret, cm).
+		WithStatusSubresource(&v1alpha1.McuDeployment{}, &v1alpha1.McuNode{}), node, dep
+}
+
+func TestReconcileConfigOnly_GenerationsEqual_NoReboot(t *testing.T) {
+	scheme := deployScheme(t)
+	var rebootCalled, configPosted bool
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1alpha1/config":
+			json.NewEncoder(w).Encode(agent.ConfigResponse{
+				Generation: 2, ActiveGeneration: 2,
+				NVS: map[string]string{"gpio_button": "9"},
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1alpha1/config":
+			configPosted = true
+			json.NewEncoder(w).Encode(map[string]any{"status": "saved"})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1alpha1/reboot":
+			rebootCalled = true
+			json.NewEncoder(w).Encode(map[string]any{"status": "rebooting"})
+		}
+	}))
+	defer ts.Close()
+
+	builder, node, dep := deployedConfigSetup(t, scheme, ts.URL, map[string]string{"gpio_button": "9"})
+	fc := builder.Build()
+
+	depPatch := dep.DeepCopy()
+	depPatch.Status.Phase = v1alpha1.PhaseDeployed
+	depPatch.Status.BoundNode = node.Name
+	fc.Status().Update(context.Background(), depPatch) //nolint:errcheck
+
+	r := &controller.McuDeploymentReconciler{
+		Client:      fc,
+		Scheme:      scheme,
+		TokenSecret: "embewi-tokens",
+		Recorder:    record.NewFakeRecorder(10),
+	}
+	reconcile(t, r, dep.Name, dep.Namespace)
+
+	if configPosted {
+		t.Error("POST /config : ne devait pas être appelé (nvs déjà conforme)")
+	}
+	if rebootCalled {
+		t.Error("POST /reboot : ne devait pas être appelé (active_generation == generation)")
+	}
+}
+
+// TestReconcileConfigOnly_ActiveGenerationBehind_RebootsWithoutRepush couvre l'écart
+// d'audit 2026-07-23 : un crash Core entre POST /config et POST /reboot laissait le
+// device durablement en config poussée-non-appliquée, jamais détecté (§6 contrat).
+func TestReconcileConfigOnly_ActiveGenerationBehind_RebootsWithoutRepush(t *testing.T) {
+	scheme := deployScheme(t)
+	var rebootCalled, configPosted bool
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1alpha1/config":
+			// nvs déjà conforme au désiré, mais generation > active_generation :
+			// le POST /config précédent a réussi, le reboot qui devait suivre non.
+			json.NewEncoder(w).Encode(agent.ConfigResponse{
+				Generation: 3, ActiveGeneration: 2,
+				NVS: map[string]string{"gpio_button": "9"},
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1alpha1/config":
+			configPosted = true
+			json.NewEncoder(w).Encode(map[string]any{"status": "saved"})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1alpha1/reboot":
+			rebootCalled = true
+			json.NewEncoder(w).Encode(map[string]any{"status": "rebooting"})
+		}
+	}))
+	defer ts.Close()
+
+	builder, node, dep := deployedConfigSetup(t, scheme, ts.URL, map[string]string{"gpio_button": "9"})
+	fc := builder.Build()
+
+	depPatch := dep.DeepCopy()
+	depPatch.Status.Phase = v1alpha1.PhaseDeployed
+	depPatch.Status.BoundNode = node.Name
+	fc.Status().Update(context.Background(), depPatch) //nolint:errcheck
+
+	r := &controller.McuDeploymentReconciler{
+		Client:      fc,
+		Scheme:      scheme,
+		TokenSecret: "embewi-tokens",
+		Recorder:    record.NewFakeRecorder(10),
+	}
+	reconcile(t, r, dep.Name, dep.Namespace)
+
+	if configPosted {
+		t.Error("POST /config : ne devait pas être ré-appelé (nvs déjà conforme, seul le reboot manquait)")
+	}
+	if !rebootCalled {
+		t.Error("POST /reboot : devait être appelé (active_generation < generation, reboot manqué détecté)")
+	}
+}
+
+func TestReconcileConfigOnly_NVSDiverges_PushesAndReboots(t *testing.T) {
+	scheme := deployScheme(t)
+	var rebootCalled, configPosted bool
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1alpha1/config":
+			json.NewEncoder(w).Encode(agent.ConfigResponse{
+				Generation: 1, ActiveGeneration: 1,
+				NVS: map[string]string{"gpio_button": "8"}, // diverge du désiré "9"
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1alpha1/config":
+			configPosted = true
+			json.NewEncoder(w).Encode(map[string]any{"status": "saved"})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1alpha1/reboot":
+			rebootCalled = true
+			json.NewEncoder(w).Encode(map[string]any{"status": "rebooting"})
+		}
+	}))
+	defer ts.Close()
+
+	builder, node, dep := deployedConfigSetup(t, scheme, ts.URL, map[string]string{"gpio_button": "9"})
+	fc := builder.Build()
+
+	depPatch := dep.DeepCopy()
+	depPatch.Status.Phase = v1alpha1.PhaseDeployed
+	depPatch.Status.BoundNode = node.Name
+	fc.Status().Update(context.Background(), depPatch) //nolint:errcheck
+
+	r := &controller.McuDeploymentReconciler{
+		Client:      fc,
+		Scheme:      scheme,
+		TokenSecret: "embewi-tokens",
+		Recorder:    record.NewFakeRecorder(10),
+	}
+	reconcile(t, r, dep.Name, dep.Namespace)
+
+	if !configPosted {
+		t.Error("POST /config : devait être appelé (nvs divergeait du désiré)")
+	}
+	if !rebootCalled {
+		t.Error("POST /reboot : devait être appelé après le push")
+	}
+}
+
+// TestPhaseWriting_OCIBlobDigestMismatch_DoesNotAdvanceToActivating couvre le re-hash du
+// blob streamé (§1/§9 contrat) : même si l'agent accepte l'écriture, un digest divergent
+// détecté après coup (registre compromis / blob substitué) ne doit pas faire avancer le
+// déploiement vers Activating.
+func TestPhaseWriting_OCIBlobDigestMismatch_DoesNotAdvanceToActivating(t *testing.T) {
+	scheme := deployScheme(t)
+
+	content := []byte("firmware binaire de test")
+	ociServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(content) //nolint:errcheck
+	}))
+	defer ociServer.Close()
+
+	deviceServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/v1alpha1/ota/write" {
+			json.NewEncoder(w).Encode(map[string]any{"status": "written"}) //nolint:errcheck
+		}
+	}))
+	defer deviceServer.Close()
+
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "target-node", Namespace: "embewi"},
+		Spec:       v1alpha1.McuNodeSpec{NodeID: "esp-1"},
+		Status:     v1alpha1.McuNodeStatus{State: "running", IP: strings.TrimPrefix(deviceServer.URL, "https://")},
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "embewi-tokens", Namespace: "embewi"},
+		Data:       map[string][]byte{"esp-1": []byte("test-token")},
+	}
+	// digest délibérément faux (ne correspond pas au contenu réellement servi par ociServer).
+	wrongDigest := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	dep := &v1alpha1.McuDeployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "write-dep", Namespace: "embewi"},
+		Spec: v1alpha1.McuDeploymentSpec{
+			NodeName: "target-node",
+			Firmware: v1alpha1.FirmwareSpec{Image: strings.TrimPrefix(ociServer.URL, "http://") + "/repo:v1"},
+		},
+	}
+
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(dep, node, secret).
+		WithStatusSubresource(&v1alpha1.McuDeployment{}, &v1alpha1.McuNode{}).
+		Build()
+
+	depPatch := dep.DeepCopy()
+	depPatch.Status.Phase = v1alpha1.PhaseWriting
+	depPatch.Status.BoundNode = node.Name
+	depPatch.Status.DeploymentID = "fw-v1"
+	depPatch.Status.Digest = wrongDigest
+	depPatch.Status.Size = int64(len(content))
+	fc.Status().Update(context.Background(), depPatch) //nolint:errcheck
+
+	r := &controller.McuDeploymentReconciler{
+		Client:      fc,
+		Scheme:      scheme,
+		OCI:         oci.New(),
+		TokenSecret: "embewi-tokens",
+		Recorder:    record.NewFakeRecorder(10),
+	}
+
+	reconcile(t, r, dep.Name, dep.Namespace)
+
+	var updatedDep v1alpha1.McuDeployment
+	fc.Get(context.Background(), types.NamespacedName{Name: dep.Name, Namespace: dep.Namespace}, &updatedDep) //nolint:errcheck
+	if updatedDep.Status.Phase != v1alpha1.PhaseWriting {
+		t.Errorf("Phase : got %q, want Writing (ne doit pas avancer sur digest mismatch)", updatedDep.Status.Phase)
+	}
+
+	rec := r.Recorder.(*record.FakeRecorder)
+	select {
+	case ev := <-rec.Events:
+		if !strings.Contains(ev, "OTABlobDigestMismatch") {
+			t.Errorf("event reçu ne contient pas OTABlobDigestMismatch : %q", ev)
+		}
+	default:
+		t.Error("aucun event OTABlobDigestMismatch émis")
 	}
 }

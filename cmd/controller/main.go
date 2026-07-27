@@ -1,11 +1,13 @@
 package main
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"flag"
 	"os"
 
-	discoveryv1 "k8s.io/api/discovery/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -31,21 +33,21 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr    string
-		probeAddr      string
-		heartbeatAddr  string
-		heartbeatCert  string
-		heartbeatKey   string
-		tokenSecret    string
-		leaderElect    bool
+		metricsAddr   string
+		probeAddr     string
+		heartbeatAddr string
+		heartbeatCert string
+		heartbeatKey  string
+		tokenSecret   string
+		leaderElect   bool
 	)
-	flag.StringVar(&metricsAddr,   "metrics-bind-address",  ":8082",         "Adresse des métriques")
-	flag.StringVar(&probeAddr,     "health-probe-address",  ":8083",         "Adresse des health probes")
-	flag.StringVar(&heartbeatAddr, "heartbeat-address",     ":8080",         "Adresse du serveur heartbeat ESP→Core")
-	flag.StringVar(&heartbeatCert, "heartbeat-tls-cert",    "",              "Certificat TLS PEM pour le serveur heartbeat (vide = HTTP plain)")
-	flag.StringVar(&heartbeatKey,  "heartbeat-tls-key",     "",              "Clé privée TLS PEM pour le serveur heartbeat")
-	flag.StringVar(&tokenSecret,   "token-secret",          "embewi-tokens", "Nom du Secret K8s contenant les tokens Bearer")
-	flag.BoolVar(&leaderElect,     "leader-elect",          false,           "Activer l'élection de leader")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8082", "Adresse des métriques")
+	flag.StringVar(&probeAddr, "health-probe-address", ":8083", "Adresse des health probes")
+	flag.StringVar(&heartbeatAddr, "heartbeat-address", ":8080", "Adresse du serveur heartbeat ESP→Core")
+	flag.StringVar(&heartbeatCert, "heartbeat-tls-cert", "", "Certificat TLS PEM pour le serveur heartbeat (vide = HTTP plain)")
+	flag.StringVar(&heartbeatKey, "heartbeat-tls-key", "", "Clé privée TLS PEM pour le serveur heartbeat")
+	flag.StringVar(&tokenSecret, "token-secret", "embewi-tokens", "Nom du Secret K8s contenant les tokens Bearer")
+	flag.BoolVar(&leaderElect, "leader-elect", false, "Activer l'élection de leader")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zap.Options{})))
@@ -66,6 +68,9 @@ func main() {
 	// Client OCI configuré via variables d'environnement.
 	// OCI_REGISTRY_USER / OCI_REGISTRY_PASS : auth Basic (Harbor, Zot, etc.)
 	// OCI_INSECURE_TLS=true                 : skip vérification certificat TLS
+	// OCI_TRUSTED_PUBLIC_KEY                : clé publique Ed25519 (base64, 32 octets bruts) —
+	//                                          active la vérification de signature (§1/§9 contrat).
+	//                                          Absente = vérification désactivée (posture dev/MVP).
 	ociOpts := []oci.Option{}
 	if user := os.Getenv("OCI_REGISTRY_USER"); user != "" {
 		ociOpts = append(ociOpts, oci.WithBasicAuth(user, os.Getenv("OCI_REGISTRY_PASS")))
@@ -73,11 +78,20 @@ func main() {
 	if os.Getenv("OCI_INSECURE_TLS") == "true" {
 		ociOpts = append(ociOpts, oci.WithInsecureTLS())
 	}
+	if pubKeyB64 := os.Getenv("OCI_TRUSTED_PUBLIC_KEY"); pubKeyB64 != "" {
+		pubKey, err := base64.StdEncoding.DecodeString(pubKeyB64)
+		if err != nil || len(pubKey) != ed25519.PublicKeySize {
+			logger.Error(err, "OCI_TRUSTED_PUBLIC_KEY invalide (attendu : 32 octets Ed25519 en base64)")
+			os.Exit(1)
+		}
+		ociOpts = append(ociOpts, oci.WithTrustedPublicKey(ed25519.PublicKey(pubKey)))
+	}
 
 	// McuNode controller — EndpointSlice + timeout heartbeat.
 	if err := (&controller.McuNodeReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("embewi-core"),
 	}).SetupWithManager(mgr); err != nil {
 		logger.Error(err, "McuNodeReconciler setup failed")
 		os.Exit(1)
@@ -102,6 +116,7 @@ func main() {
 	hbSrv.TLSCertFile = heartbeatCert
 	hbSrv.TLSKeyFile = heartbeatKey
 	hbSrv.TokenSecret = tokenSecret
+	hbSrv.Recorder = mgr.GetEventRecorderFor("embewi-core")
 	if err := mgr.Add(hbSrv); err != nil {
 		logger.Error(err, "heartbeat server add failed")
 		os.Exit(1)

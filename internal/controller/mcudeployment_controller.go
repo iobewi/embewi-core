@@ -33,6 +33,20 @@ const ConfirmTimeout = 2 * time.Minute
 // Utilisé pour distinguer les erreurs permanentes des erreurs réseau transitoires.
 var errConfigPermanent = stderrors.New("erreur de configuration permanente")
 
+// errConfigMapNotFound distingue le cas « McuConfigMap absent » (reason K8s
+// ConfigMapNotFound, §4b contrat) des autres erreurs permanentes (valeurs
+// invalides → ConfigInvalid). Toujours enveloppé avec errConfigPermanent.
+var errConfigMapNotFound = stderrors.New("McuConfigMap introuvable")
+
+// configFailReason mappe une erreur de config permanente vers le reason K8s
+// stable correspondant (§4b contrat).
+func configFailReason(err error) string {
+	if stderrors.Is(err, errConfigMapNotFound) {
+		return "ConfigMapNotFound"
+	}
+	return "ConfigInvalid"
+}
+
 // annotationConfirmingSince : timestamp RFC3339 d'entrée en phase Confirming.
 // Permet le timeout négatif horodaté sans champ CRD supplémentaire.
 const annotationConfirmingSince = "embewi.io/confirming-since"
@@ -195,16 +209,24 @@ func (r *McuDeploymentReconciler) phasePulling(ctx context.Context, dep *v1alpha
 	return ctrl.Result{Requeue: true}, nil
 }
 
-// pushConfigIfNeeded compare le McuConfigMap avec le NVS du device et pousse si divergent.
+// pushConfigIfNeeded compare le McuConfigMap avec le NVS du device et pousse si divergent (§6 contrat).
 // Sémantique merge-on-key : seules les clés citées dans Data sont vérifiées/écrites.
 // Les clés réservées (préfixe `_`) sont ignorées — l'agent les filtre silencieusement en NVS.
-// Retourne true si une mise à jour a été poussée.
-// Retourne errConfigPermanent pour les erreurs non-transitoires (clé trop longue, CM absent).
+//
+// Retourne needsReboot=true si :
+//   - une nouvelle config vient d'être poussée (nvs divergeait du désiré), OU
+//   - le nvs est déjà conforme mais active_generation < generation (§6 contrat) : un
+//     précédent POST /config a réussi mais le POST /reboot qui devait suivre n'a jamais eu
+//     lieu (ex. crash Core entre les deux) — il faut rebooter, pas repousser la config.
+//
+// Retourne errConfigPermanent pour les erreurs non-transitoires (clé trop longue, CM absent) —
+// errConfigMapNotFound distingue le cas CM absent, mappé vers le reason K8s ConfigMapNotFound
+// plutôt que ConfigInvalid (cf. configFailReason).
 func (r *McuDeploymentReconciler) pushConfigIfNeeded(ctx context.Context, cli *agent.Client, dep *v1alpha1.McuDeployment) (bool, error) {
 	var cm v1alpha1.McuConfigMap
 	if err := r.Get(ctx, client.ObjectKey{Name: dep.Spec.ConfigMapRef, Namespace: dep.Namespace}, &cm); err != nil {
 		if apierrors.IsNotFound(err) {
-			return false, fmt.Errorf("%w: McuConfigMap %q introuvable", errConfigPermanent, dep.Spec.ConfigMapRef)
+			return false, fmt.Errorf("%w: %w: McuConfigMap %q introuvable", errConfigPermanent, errConfigMapNotFound, dep.Spec.ConfigMapRef)
 		}
 		return false, fmt.Errorf("McuConfigMap %q: %w", dep.Spec.ConfigMapRef, err)
 	}
@@ -238,6 +260,13 @@ func (r *McuDeploymentReconciler) pushConfigIfNeeded(ctx context.Context, cli *a
 		}
 	}
 	if !needsPush {
+		// nvs déjà conforme au désiré — reste à vérifier que le reboot qui devait suivre
+		// un précédent POST /config a bien eu lieu (§6 : idempotence config).
+		if current.ActiveGeneration < current.Generation {
+			log.FromContext(ctx).Info("config déjà poussée mais pas encore active (crash Core entre POST /config et /reboot ?) → reboot requis",
+				"generation", current.Generation, "activeGeneration", current.ActiveGeneration)
+			return true, nil
+		}
 		return false, nil
 	}
 
@@ -261,16 +290,16 @@ func (r *McuDeploymentReconciler) reconcileConfigOnly(ctx context.Context, dep *
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	pushed, err := r.pushConfigIfNeeded(ctx, cli, dep)
+	needsReboot, err := r.pushConfigIfNeeded(ctx, cli, dep)
 	if err != nil {
 		if stderrors.Is(err, errConfigPermanent) {
-			return r.fail(ctx, dep, "ConfigInvalid", err.Error())
+			return r.fail(ctx, dep, configFailReason(err), err.Error())
 		}
 		logger.Error(err, "pushConfigIfNeeded échoué (transitoire)")
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
-	if pushed {
+	if needsReboot {
 		if err := cli.PostReboot(); err != nil {
 			logger.Error(err, "POST /reboot échoué après config update")
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -317,7 +346,7 @@ func (r *McuDeploymentReconciler) phasePreparing(ctx context.Context, dep *v1alp
 	if dep.Spec.ConfigMapRef != "" {
 		if _, err := r.pushConfigIfNeeded(ctx, cli, dep); err != nil {
 			if stderrors.Is(err, errConfigPermanent) {
-				return r.fail(ctx, dep, "ConfigInvalid", err.Error())
+				return r.fail(ctx, dep, configFailReason(err), err.Error())
 			}
 			log.FromContext(ctx).Error(err, "push config avant OTA échoué (transitoire)")
 			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
@@ -331,7 +360,10 @@ func (r *McuDeploymentReconciler) phasePreparing(ctx context.Context, dep *v1alp
 		log.FromContext(ctx).Error(err, "GET /info échoué (transitoire)")
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
-	r.persistNodeInfo(ctx, node, info)
+	if err := r.persistNodeInfo(ctx, node, info); err != nil {
+		r.Recorder.Event(dep, corev1.EventTypeWarning, "APIVersionUnsupported", err.Error())
+		return r.fail(ctx, dep, "APIVersionUnsupported", err.Error())
+	}
 	switch {
 	case info.Staged.State == "activating" && info.Staged.DeploymentID == dep.Status.DeploymentID:
 		log.FromContext(ctx).Info("staged=activating (idempotence) → skip write+activate, attente heartbeat")
@@ -387,23 +419,38 @@ func (r *McuDeploymentReconciler) phaseWriting(ctx context.Context, dep *v1alpha
 		log.FromContext(ctx).Error(err, "stream blob OCI échoué", "digest", dep.Status.Digest)
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
-	defer stream.Close()
 
-	if err := cli.OTAWrite(dep.Status.DeploymentID, dep.Status.Digest, dep.Status.Size, stream); err != nil {
-		log.FromContext(ctx).Error(err, "OTAWrite échoué")
+	writeErr := cli.OTAWrite(dep.Status.DeploymentID, dep.Status.Digest, dep.Status.Size, stream)
+	stream.Close() //nolint:errcheck // ne porte jamais l'erreur de mismatch, cf. BlobStream
+	// stream.Err() ne peut détecter un digest divergent (§1/§9 contrat) qu'une fois le
+	// flux intégralement consommé — donc seulement pertinent si l'écriture a réussi.
+	mismatchErr := stream.Err()
+
+	if writeErr != nil {
+		log.FromContext(ctx).Error(writeErr, "OTAWrite échoué")
 		// Mapper les codes §4b → Events K8s stables.
-		var writeErr *agent.OTAWriteError
-		if stderrors.As(err, &writeErr) {
-			switch writeErr.Status {
+		var otaWriteErr *agent.OTAWriteError
+		if stderrors.As(writeErr, &otaWriteErr) {
+			switch otaWriteErr.Status {
 			case "digest_mismatch":
-				r.Recorder.Event(dep, corev1.EventTypeWarning, "OTADigestMismatch", writeErr.Error())
+				r.Recorder.Event(dep, corev1.EventTypeWarning, "OTADigestMismatch", otaWriteErr.Error())
 			case "write_failed":
-				r.Recorder.Event(dep, corev1.EventTypeWarning, "OTAWriteFailed", writeErr.Error())
+				r.Recorder.Event(dep, corev1.EventTypeWarning, "OTAWriteFailed", otaWriteErr.Error())
 			case "ota_begin_failed":
-				r.Recorder.Event(dep, corev1.EventTypeWarning, "OTABeginFailed", writeErr.Error())
-			// range_mismatch (416) : resync attendu — pas d'event, on réessaie.
+				r.Recorder.Event(dep, corev1.EventTypeWarning, "OTABeginFailed", otaWriteErr.Error())
+				// range_mismatch (416) : resync attendu — pas d'event, on réessaie.
 			}
 		}
+		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	}
+
+	if mismatchErr != nil {
+		// L'agent a accepté l'écriture, mais le Core découvre après coup que le blob
+		// streamé ne correspond pas au digest attendu (registre compromis, corruption
+		// silencieuse) — le device peut être en train de staged un firmware inattendu.
+		// Ne pas activer : re-tenter le pull + write.
+		log.FromContext(ctx).Error(mismatchErr, "digest du blob OCI streamé invalide après écriture")
+		r.Recorder.Event(dep, corev1.EventTypeWarning, "OTABlobDigestMismatch", mismatchErr.Error())
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
@@ -428,7 +475,10 @@ func (r *McuDeploymentReconciler) phaseActivating(ctx context.Context, dep *v1al
 		log.FromContext(ctx).Error(err, "GET /info avant activate échoué (transitoire)")
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
-	r.persistNodeInfo(ctx, node, info)
+	if err := r.persistNodeInfo(ctx, node, info); err != nil {
+		r.Recorder.Event(dep, corev1.EventTypeWarning, "APIVersionUnsupported", err.Error())
+		return r.fail(ctx, dep, "APIVersionUnsupported", err.Error())
+	}
 	alreadyActivated :=
 		(info.Staged.State == "activating" && info.Staged.DeploymentID == dep.Status.DeploymentID) ||
 			info.State == "pending_verify"
@@ -674,9 +724,13 @@ func (r *McuDeploymentReconciler) nodeToDeployments(ctx context.Context, obj cli
 	return reqs
 }
 
-// persistNodeInfo persiste les capacités hardware depuis GET /info dans McuNode.Status.
-// Chip, IDFVersion et AppPort sont inconnus jusqu'au premier contact — ne bloquer jamais sur cette erreur.
-func (r *McuDeploymentReconciler) persistNodeInfo(ctx context.Context, node *v1alpha1.McuNode, info *agent.InfoResponse) {
+// persistNodeInfo sauvegarde les capacités hardware lues via GET /info et
+// négocie la version d'API (contrat §4). L'erreur retournée ne concerne QUE
+// la négociation — une incompatibilité de version doit stopper le
+// déploiement en cours, contrairement à un échec de patch (non bloquant).
+func (r *McuDeploymentReconciler) persistNodeInfo(ctx context.Context, node *v1alpha1.McuNode, info *agent.InfoResponse) error {
+	negotiated, negErr := agent.NegotiateAPIVersion(info.ApiVersions)
+
 	patch := client.MergeFrom(node.DeepCopy())
 	node.Status.Chip = info.Chip
 	node.Status.IDFVersion = info.IDFVersion
@@ -685,9 +739,11 @@ func (r *McuDeploymentReconciler) persistNodeInfo(ctx context.Context, node *v1a
 	if info.AppPort != 0 {
 		node.Status.AppPort = info.AppPort
 	}
+	node.Status.ApiVersion = negotiated
 	if err := r.Status().Patch(ctx, node, patch); err != nil {
 		log.FromContext(ctx).Error(err, "patch McuNode hardware info échoué (non bloquant)")
 	}
+	return negErr
 }
 
 // reconcileDeployed gère un McuDeployment en phase Deployed :
