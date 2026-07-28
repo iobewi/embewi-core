@@ -31,10 +31,15 @@ spec:
   tokenRef:                        # référence au Secret K8s portant le token Bearer
     name: embewi-a1b2c3-token
     namespace: embewi
+  tlsSecretRef:                    # optionnel — Secret kubernetes.io/tls (compat cert-manager)
+    name: embewi-a1b2c3-tls        # absent = agent garde son cert auto-signé de build
 status:
   ip: "192.168.10.42"             # mis à jour depuis heartbeat.ip à chaque réception
   lastHeartbeat: "2026-06-29T10:00:03Z"
   state: running
+  apiVersion: v1alpha1             # négocié depuis GET /info (api_versions), absent → v1alpha1 supposé
+  tlsCertDigest: "a3f9..."         # sha256(tls.crt+tls.key) du dernier cert TLS appliqué (suivi Core-side)
+  lastRebootRequested: ""          # miroir de l'annotation embewi.io/reboot-requested traitée
   conditions:
     - type: Provisioned
       status: "True"
@@ -66,6 +71,7 @@ spec:
   nodeName: embewi-a1b2c3          # pin explicite privilégié
   firmware: registry.local/embewi/wheel-controller:v1.1.0
   configMapRef: wheel-left-gpio    # optionnel — absent = défauts build
+  appPort: 9090                    # optionnel — 0/absent = pas de reconfiguration (POST /app/port)
 status:
   deploymentId: wheel-controller-1.1.0
   activeSlot: ota_0
@@ -183,16 +189,57 @@ Le handle OTA et le SHA-256 incrémental survivent aux déconnexions TCP côté 
 **Règle** : un refus métier légitime répond HTTP 200 avec le code dans le corps.
 Les `4xx/5xx` sont des erreurs de protocole. Ne pas inverser.
 
-### Rotation de token (§4)
+### Rotation de token (§4) — sans coupure, via `previousToken`
 
 ```text
-1. Générer newToken, mettre à jour le Secret K8s.
-2. POST /token (Bearer oldToken) {"token":"newToken"}
-3. Device commite en NVS, répond 200 → seul newToken valide dès maintenant.
-4. Core bascule sur newToken pour tous les appels suivants.
+1. Écriture ATOMIQUE (un seul kubectl patch) : Secret["token"]=newToken +
+   Secret["previousToken"]=oldToken. Jamais newToken seul — sans
+   previousToken, un crash Core juste après l'écriture rend le device
+   injoignable en inbound (seul recours : portail captif).
+2. reconcileTokenRotation (McuNodeReconciler) détecte previousToken → rejoue
+   POST /token (Bearer previousToken, corps newToken) à chaque reconcile
+   tant que non confirmé.
+3. Device commite newToken en NVS avant de répondre 200 (atomique, §4) — seul
+   newToken valide dès la réponse.
+4. Premier heartbeat authentifié en newToken → previousToken effacé du
+   Secret par le Core (clearPreviousToken, internal/heartbeat/server.go).
 ```
 
-Atomicité garantie côté agent : NVS commitée avant la réponse.
+Le heartbeat handler accepte `token` ET `previousToken` pendant la fenêtre de
+rotation (`validateToken`) — ce n'est pas une anomalie tant que le device n'a
+pas confirmé le nouveau token.
+
+### `POST /app/port` — port applicatif (§4, sur `McuDeployment`)
+
+`spec.appPort` (McuDeployment) comparé à `status.appPort` (McuNode, peuplé
+depuis `GET /info`) → push si divergent. **Pas de reboot** : l'agent
+redémarre son service app à chaud. `status.appPort` mis à jour immédiatement
+après un push confirmé (rien d'autre ne le rafraîchit en phase Deployed).
+
+### `POST /tls/cert` — rotation de certificat sans cycle OTA (§4, sur `McuNode`)
+
+`spec.tlsSecretRef` référence un Secret `kubernetes.io/tls` (`tls.crt`/
+`tls.key` — compatible cert-manager, renouvellement automatique
+transparent). Suivi par `sha256(cert+key)` dans `status.tlsCertDigest`
+(Core-side : contrairement à la config §4a, l'agent n'expose aucun digest de
+cert via `GET /info`). Différent → `POST /tls/cert` puis **reboot requis**
+(effectif au prochain `embewi_http_start()`) ; le digest n'est marqué à jour
+qu'après un reboot confirmé.
+
+### Reboot à la demande — annotation (pas dans le contrat, Core seul)
+
+Pas d'équivalent `kubectl rollout restart` pour un CRD (verbe spécifique aux
+`deployment`/`daemonset`/`statefulset`) :
+
+```bash
+kubectl annotate mcunode <name> embewi.io/reboot-requested="$(date +%s)" --overwrite
+```
+
+Valeur comparée à `status.lastRebootRequested` (nonce opaque) → différente
+→ `POST /reboot`. Pas de nettoyage d'annotation requis. **Découplé de
+`delete McuNode`** délibérément : le CRD représente le device, il ne le
+possède pas (même logique que `kubectl delete node` qui ne touche jamais à
+la VM sous-jacente) — supprimer l'objet ne déclenche aucune action physique.
 
 ## Flux sortants reçus (ESP → Core, contrat §5)
 
@@ -370,5 +417,8 @@ Ne pas implémenter sans décision explicite :
 | Ressource | Rôle |
 |---|---|
 | `contract/docs/embewi-contract-v2.md` | Spec normative complète |
+| `contract/docs/liaison/` | Matrice de traçabilité contrat↔code + suivi des issues cross-repo |
 | `embewi-agent-esp` | Firmware device (source, build, tests) |
 | `docs/` (agent) | Doc Sphinx : architecture, API, config, sécurité, workload SDK |
+| `docs/core/controllers.md` | Détail des reconcilers Core (phases OTA, app_port, TLS cert, reboot) |
+| `docs/usage/operations.md` | Procédures opérationnelles (rotation token, reboot, métriques) |
