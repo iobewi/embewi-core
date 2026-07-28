@@ -8,6 +8,15 @@ Première version publique. Implémente le contrat `v1alpha1`
 ([`embewi`](https://github.com/iobewi/embewi)) côté Core, vérifié croisé
 contre [`embewi-agent-esp`](https://github.com/iobewi/embewi-agent-esp).
 
+> **Pourquoi `v1.0.0` alors que le protocole est encore `v1alpha1` ?**
+> Version logicielle (ce tag, maturité de l'implémentation) et version de
+> protocole (`v1alpha1`, stabilité du contrat de communication Core↔Agent)
+> sont deux axes indépendants — comme Kubernetes lui-même, versionné en
+> `v1.29` pendant que ses groupes d'API évoluent séparément
+> (`apps/v1`, `batch/v1`…). Rester en `v1alpha1` signale honnêtement que
+> l'interface (endpoints, `api_versions`, négociation) peut encore évoluer ;
+> ce n'est pas un oubli.
+
 ### Ajouté
 
 **Contrôleurs Kubernetes**
