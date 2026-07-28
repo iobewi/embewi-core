@@ -146,3 +146,47 @@ kubectl get mcunode esp32-motor-left -o jsonpath='{.status.lastRebootRequested}'
 
 Une nouvelle valeur (différente de `status.lastRebootRequested`) redéclenche
 un reboot — pas besoin de retirer l'annotation entre deux usages.
+
+## Décommissionner un device en sécurité (firmware « safe-mode »)
+
+`delete McuNode` ne touche jamais au device physique (cf. ci-dessus) — un
+actionneur (moteur, relais…) piloté par le workload en cours continue de
+tourner sur son dernier état GPIO, orphelin de toute gestion Core. Pour
+mettre un device hors service **en sécurité** avant de le débrancher/déplacer,
+ne pas essayer de forcer un rollback (§3 contrat) : ce mécanisme n'est pas
+pilotable par le Core (il ne s'auto-déclenche que côté device sur échec de
+self-check en `pending_verify`) et revient sur l'**autre slot OTA**, quel
+qu'il soit — pas une image choisie, potentiellement une ancienne version qui
+pilote encore les mêmes GPIO.
+
+**Approche recommandée** : un déploiement OTA normal vers un firmware
+« safe-mode » dédié — même agent embewi actif (heartbeat, joignable,
+gérable), mais qui ne touche **aucun** GPIO actionneur, inerte par
+construction. Aucun mécanisme Core spécial : le pipeline OTA standard
+(chunking, digest, signature, idempotence, confirmation par heartbeat)
+s'applique tel quel.
+
+```bash
+# 1. Construire/publier le firmware safe-mode une fois (registre OCI),
+#    par ex. registry.local/embewi/safe-mode:v1.0.0
+
+# 2. Basculer le device dessus comme n'importe quel autre déploiement
+kubectl patch mcudeployment wheel-left --type=merge -p '
+spec:
+  firmware:
+    image: registry.local/embewi/safe-mode:v1.0.0
+'
+
+# 3. Attendre la confirmation avant de débrancher/déplacer physiquement
+kubectl wait mcudeployment/wheel-left --for=condition=Available --timeout=5m
+kubectl get mcunode esp32-motor-left -o jsonpath='{.status.state} {.status.otaValidated}'
+# running true → GPIO inertes, device peut être manipulé sans risque
+```
+
+**Limite** : ne fonctionne que si le device est encore **joignable** (Wi-Fi
+up, agent qui répond) — adapté à un décommissionnement planifié, pas à un
+device déjà bloqué/injoignable (aucun moyen de pousser un OTA vers un
+device qu'on ne peut pas contacter).
+
+Une fois le device physiquement retiré, supprimer le `McuDeployment` puis le
+`McuNode` (bookkeeping administratif seul, cf. ci-dessus).
