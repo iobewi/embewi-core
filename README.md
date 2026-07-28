@@ -330,3 +330,10 @@ go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
 | Stream binaire PUT /ota/write | ✅ |
 | Tokens depuis Secret K8s | ✅ |
 | Déploiement in-cluster (Deployment + RBAC) | ✅ |
+
+## Licence, sécurité, changelog
+
+- Licence : [MIT](LICENSE)
+- Vulnérabilité de sécurité à signaler ? Voir [SECURITY.md](SECURITY.md)
+  (divulgation privée, pas d'issue publique)
+- Historique des versions : [CHANGELOG.md](CHANGELOG.md)
