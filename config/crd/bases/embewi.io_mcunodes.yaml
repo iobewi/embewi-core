@@ -35,6 +35,15 @@ spec:
                 nodeId:
                   type: string
                   description: "Identifiant node (doit correspondre à EMBEWI_NODE_ID dans le firmware)"
+                tokenRef:
+                  type: object
+                  required: [name]
+                  description: "Secret K8s portant le token Bearer du device (data[\"token\"], §1 contrat). Rotation : voir data[\"previousToken\"]"
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
                 tlsSecretRef:
                   type: object
                   required: [name]
@@ -69,6 +78,12 @@ spec:
                 uptimeMs:
                   type: integer
                   format: int64
+                configGeneration:
+                  type: integer
+                tempCelsius:
+                  type: number
+                taskHwmMin:
+                  type: integer
                 chip:
                   type: string
                 idfVersion:

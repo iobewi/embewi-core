@@ -55,6 +55,9 @@ spec:
                   description: "Port TCP désiré du service applicatif embarqué (POST /app/port). 0 = pas de reconfiguration"
                   minimum: 1024
                   maximum: 65535
+                configMapRef:
+                  type: string
+                  description: "Nom d'un McuConfigMap dans le même namespace (§7a contrat). Absent = pas de push config"
             status:
               type: object
               properties:
