@@ -81,3 +81,25 @@ spec:
       targetPort: 8080
       nodePort: 30880   # port accessible par les ESP sur le réseau local
       protocol: TCP
+---
+# ClusterIP dédié aux métriques (§8b contrat) — jamais exposé aux devices ESP,
+# contrairement au Service heartbeat NodePort ci-dessus. Nécessaire pour que le
+# ServiceMonitor (port "metrics") trouve un Endpoints à scraper : sans Service
+# nommant ce port, Prometheus Operator n'a rien à scraper malgré /metrics actif
+# sur le conteneur.
+apiVersion: v1
+kind: Service
+metadata:
+  name: embewi-core-metrics
+  namespace: embewi-system
+  labels:
+    app: embewi-core
+spec:
+  type: ClusterIP
+  selector:
+    app: embewi-core
+  ports:
+    - name: metrics
+      port: 8082
+      targetPort: 8082
+      protocol: TCP

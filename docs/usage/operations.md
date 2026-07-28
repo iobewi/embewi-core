@@ -65,7 +65,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: embewi-core
-  namespace: embewi
+  namespace: embewi-system
 spec:
   selector:
     matchLabels:
@@ -76,29 +76,53 @@ spec:
       interval: 30s
 ```
 
+Nécessite un Service exposant un port **nommé** `metrics` (ex.
+`embewi-core-metrics`, `config/manager/deployment.yaml`) — sans ça, le
+ServiceMonitor n'a aucun Endpoints à scraper malgré `/metrics` actif sur le
+conteneur.
+
 ---
 
 ## Rotation de token
 
+Nécessite `spec.tokenRef` sur le McuNode (Secret dédié par device — voir
+`config/samples/mcunode_sample.yaml`). Le fallback historique (Secret
+centralisé `embewi-tokens` keyé par `nodeId`, sans `tokenRef`) ne supporte
+**pas** la rotation automatisée ci-dessous.
+
+Le Core rejoue lui-même `POST /token` — pas d'appel `curl` manuel à faire :
+
 ```bash
-# 1. Générer un nouveau token
+# Écriture ATOMIQUE de token + previousToken (un seul kubectl patch) : sans ça,
+# un crash Core juste après l'écriture du nouveau token rend le device
+# injoignable en inbound (previousToken est ce qui permet au Core de rejouer
+# POST /token tant que le device n'a pas confirmé — seul recours sinon : le
+# portail captif de reprovisioning).
+OLD_TOKEN=$(kubectl get secret esp32-motor-left-token \
+  -o jsonpath='{.data.token}' | base64 -d)
 NEW_TOKEN=$(openssl rand -hex 16)
 
-# 2. Mettre à jour le Secret K8s
-kubectl patch secret embewi-tokens \
-  --type=json \
-  -p='[{"op":"replace","path":"/data/esp32-motor-left","value":"'$(echo -n "$NEW_TOKEN" | base64)'"}]'
-
-# 3. Appeler POST /token sur le device (avec l'ancien token encore valide)
-OLD_TOKEN=$(kubectl get secret embewi-tokens \
-  -o jsonpath='{.data.esp32-motor-left}' | base64 -d)
-curl -k -X POST https://192.168.10.50/v1alpha1/token \
-  -H "Authorization: Bearer $OLD_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d "{\"token\":\"$NEW_TOKEN\"}"
-# → {"status":"ok"}
+kubectl patch secret esp32-motor-left-token --type=json -p="[
+  {\"op\":\"replace\",\"path\":\"/data/token\",\"value\":\"$(echo -n "$NEW_TOKEN" | base64)\"},
+  {\"op\":\"add\",\"path\":\"/data/previousToken\",\"value\":\"$(echo -n "$OLD_TOKEN" | base64)\"}
+]"
 ```
 
-Dès la réponse 200, seul `newToken` est valide — le device a committé en NVS.
-Le Core utilise automatiquement le nouveau token dès le prochain appel (lecture
-live du Secret).
+À partir de là, entièrement automatique (`internal/controller/mcunode_controller.go`,
+`reconcileTokenRotation` + `internal/heartbeat/server.go`, `clearPreviousToken`) :
+
+```text
+1. Reconcile McuNode détecte previousToken → POST /token (auth previousToken,
+   corps newToken), rejoué à chaque reconcile tant que non confirmé.
+2. Device commite newToken en NVS avant de répondre (atomique, §4 contrat).
+3. Premier heartbeat authentifié avec newToken → previousToken effacé du
+   Secret par le Core.
+```
+
+Suivre la progression :
+
+```bash
+kubectl get events --field-selector reason=TokenRotationApplied
+kubectl get secret esp32-motor-left-token -o jsonpath='{.data.previousToken}'
+# vide (absent) une fois la rotation confirmée
+```

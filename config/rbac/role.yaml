@@ -19,10 +19,11 @@ rules:
     resources: ["endpointslices"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
-  # Secret tokens Bearer
+  # Secrets : tokens Bearer (lecture) + previousToken (clearPreviousToken efface la
+  # clé du Secret sur confirmation de rotation, §4 contrat — internal/heartbeat/server.go)
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "update", "patch"]
 
   # Events
   - apiGroups: [""]
