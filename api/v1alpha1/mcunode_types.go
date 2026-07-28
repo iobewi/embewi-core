@@ -99,6 +99,13 @@ type McuNodeStatus struct {
 	// nouveau push est nécessaire quand Spec.TLSSecretRef change.
 	TLSCertDigest string `json:"tlsCertDigest,omitempty"`
 
+	// LastRebootRequested reflète la dernière valeur de l'annotation
+	// embewi.io/reboot-requested traitée avec succès (POST /reboot). Pattern
+	// kubectl rollout restart : l'annotation sert de nonce opaque (ex. un
+	// timestamp) — valeur différente de ce champ → reboot déclenché. Pas de
+	// nettoyage d'annotation requis, contrairement à un flag booléen.
+	LastRebootRequested string `json:"lastRebootRequested,omitempty"`
+
 	// Ready pilote EndpointSlice.ready (§8 contrat).
 	// true ssi state==running && ota_validated==true && heartbeat récent.
 	Ready bool `json:"ready"`

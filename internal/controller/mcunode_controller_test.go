@@ -555,3 +555,140 @@ func TestReconcileTLSCert_NoSecretRef_NoOp(t *testing.T) {
 		t.Error("aucun appel ne devait être fait sans TLSSecretRef")
 	}
 }
+
+// TestReconcileRebootRequest_NewAnnotation_TriggersReboot vérifie le pattern kubectl
+// rollout restart : une nouvelle valeur d'annotation embewi.io/reboot-requested (jamais
+// vue) déclenche POST /reboot, puis Status.LastRebootRequested est mise à jour.
+func TestReconcileRebootRequest_NewAnnotation_TriggersReboot(t *testing.T) {
+	scheme := nodeScheme(t)
+
+	rebootCalled := false
+	device := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1alpha1/reboot" {
+			t.Errorf("chemin inattendu : %s", r.URL.Path)
+		}
+		rebootCalled = true
+		json.NewEncoder(w).Encode(map[string]any{"status": "rebooting"}) //nolint:errcheck
+	}))
+	defer device.Close()
+
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "esp-reboot", Namespace: "embewi",
+			Annotations: map[string]string{"embewi.io/reboot-requested": "1234"},
+		},
+		Spec: v1alpha1.McuNodeSpec{
+			NodeID:   "esp-reboot-id",
+			TokenRef: v1alpha1.SecretRef{Name: "esp-reboot-token"},
+		},
+		Status: v1alpha1.McuNodeStatus{IP: device.Listener.Addr().String()},
+	}
+	tokenSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-reboot-token", Namespace: "embewi"},
+		Data:       map[string][]byte{"token": []byte("test-token")},
+	}
+
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node, tokenSecret).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	r := &controller.McuNodeReconciler{Client: fc, Scheme: scheme, Recorder: record.NewFakeRecorder(10)}
+	reconcileNode(t, r, node.Name, node.Namespace)
+
+	if !rebootCalled {
+		t.Fatal("POST /reboot devait être appelé (nouvelle valeur d'annotation)")
+	}
+
+	var updated v1alpha1.McuNode
+	fc.Get(context.Background(), types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, &updated) //nolint:errcheck
+	if updated.Status.LastRebootRequested != "1234" {
+		t.Errorf("LastRebootRequested : got %q, want %q", updated.Status.LastRebootRequested, "1234")
+	}
+}
+
+// TestReconcileRebootRequest_SameAnnotation_NoOp vérifie qu'une annotation déjà traitée
+// (== Status.LastRebootRequested) ne redéclenche pas de reboot.
+func TestReconcileRebootRequest_SameAnnotation_NoOp(t *testing.T) {
+	scheme := nodeScheme(t)
+
+	called := false
+	device := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer device.Close()
+
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "esp-reboot2", Namespace: "embewi",
+			Annotations: map[string]string{"embewi.io/reboot-requested": "1234"},
+		},
+		Spec: v1alpha1.McuNodeSpec{
+			NodeID:   "esp-reboot2-id",
+			TokenRef: v1alpha1.SecretRef{Name: "esp-reboot2-token"},
+		},
+		Status: v1alpha1.McuNodeStatus{IP: device.Listener.Addr().String()},
+	}
+	tokenSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-reboot2-token", Namespace: "embewi"},
+		Data:       map[string][]byte{"token": []byte("test-token")},
+	}
+
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node, tokenSecret).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	nodePatch := node.DeepCopy()
+	nodePatch.Status.LastRebootRequested = "1234"
+	fc.Status().Update(context.Background(), nodePatch) //nolint:errcheck
+
+	r := &controller.McuNodeReconciler{Client: fc, Scheme: scheme, Recorder: record.NewFakeRecorder(10)}
+	reconcileNode(t, r, node.Name, node.Namespace)
+
+	if called {
+		t.Error("POST /reboot ne devait pas être appelé (annotation déjà traitée)")
+	}
+}
+
+// TestReconcileRebootRequest_NoAnnotation_NoOp vérifie l'absence d'appel en l'absence
+// de toute annotation embewi.io/reboot-requested.
+func TestReconcileRebootRequest_NoAnnotation_NoOp(t *testing.T) {
+	scheme := nodeScheme(t)
+
+	called := false
+	device := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer device.Close()
+
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-reboot3", Namespace: "embewi"},
+		Spec: v1alpha1.McuNodeSpec{
+			NodeID:   "esp-reboot3-id",
+			TokenRef: v1alpha1.SecretRef{Name: "esp-reboot3-token"},
+		},
+		Status: v1alpha1.McuNodeStatus{IP: device.Listener.Addr().String()},
+	}
+	tokenSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-reboot3-token", Namespace: "embewi"},
+		Data:       map[string][]byte{"token": []byte("test-token")},
+	}
+
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node, tokenSecret).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	r := &controller.McuNodeReconciler{Client: fc, Scheme: scheme, Recorder: record.NewFakeRecorder(10)}
+	reconcileNode(t, r, node.Name, node.Namespace)
+
+	if called {
+		t.Error("POST /reboot ne devait pas être appelé (aucune annotation)")
+	}
+}

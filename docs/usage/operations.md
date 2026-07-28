@@ -126,3 +126,23 @@ kubectl get events --field-selector reason=TokenRotationApplied
 kubectl get secret esp32-motor-left-token -o jsonpath='{.data.previousToken}'
 # vide (absent) une fois la rotation confirmée
 ```
+
+## Rebooter un device à la demande
+
+Pas de `kubectl rollout restart` pour un CRD (spécifique aux
+`deployment`/`daemonset`/`statefulset`) ni de `kubectl delete pod` équivalent
+(`delete McuNode` ne touche jamais au device physique — le CRD le
+représente, il ne le possède pas). À la place, une annotation :
+
+```bash
+kubectl annotate mcunode esp32-motor-left \
+  embewi.io/reboot-requested="$(date +%s)" --overwrite
+```
+
+```bash
+kubectl get events --field-selector reason=RebootRequested
+kubectl get mcunode esp32-motor-left -o jsonpath='{.status.lastRebootRequested}'
+```
+
+Une nouvelle valeur (différente de `status.lastRebootRequested`) redéclenche
+un reboot — pas besoin de retirer l'annotation entre deux usages.

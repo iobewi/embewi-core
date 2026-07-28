@@ -76,6 +76,28 @@ puis `POST /reboot` (effectif au prochain `embewi_http_start()`), puis
 `Status.TLSCertDigest` mis à jour. Absent = l'agent garde son certificat auto-signé de
 build.
 
+### Reboot à la demande (annotation)
+
+Pas d'équivalent `kubectl rollout restart` natif pour un CRD (ce verbe ne
+s'applique qu'aux `deployment`/`daemonset`/`statefulset`). Même pattern
+reproduit via une annotation :
+
+```bash
+kubectl annotate mcunode esp32-motor-left \
+  embewi.io/reboot-requested="$(date +%s)" --overwrite
+```
+
+Valeur comparée à `Status.LastRebootRequested` — différente (nonce opaque,
+n'importe quelle chaîne convient) → `POST /reboot`, puis mémorisée. Pas de
+nettoyage d'annotation requis : un nouveau `--overwrite` avec une valeur
+différente redéclenche naturellement. Découplé de toute autre réconciliation
+(config, cert TLS, OTA) — action ponctuelle et explicite uniquement.
+
+`delete McuNode` ne déclenche volontairement **aucune** action physique sur
+le device — même logique que `kubectl delete node` en K8s natif, qui ne
+touche pas à la VM/machine sous-jacente : le CRD représente le device, il ne
+le possède pas.
+
 ---
 
 ## McuDeployment reconciler

@@ -40,6 +40,12 @@ const (
 	// l'objet réellement supprimé, d'où le besoin d'intercepter via finalizer plutôt
 	// que sur le NotFound du prochain reconcile.
 	nodeMetricsFinalizer = "embewi.io/metrics-cleanup"
+
+	// annotationRebootRequested déclenche un POST /reboot à la demande. Valeur
+	// opaque (ex. `date +%s`) servant de nonce — comparée à Status.LastRebootRequested,
+	// pas de sémantique propre (pattern kubectl rollout restart) :
+	//   kubectl annotate mcunode <name> embewi.io/reboot-requested="$(date +%s)" --overwrite
+	annotationRebootRequested = "embewi.io/reboot-requested"
 )
 
 // McuNodeReconciler réconcilie les McuNode.
@@ -149,6 +155,9 @@ func (r *McuNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		if err := r.reconcileTLSCert(ctx, &node); err != nil {
 			return ctrl.Result{}, fmt.Errorf("reconcile tls cert: %w", err)
+		}
+		if err := r.reconcileRebootRequest(ctx, &node); err != nil {
+			return ctrl.Result{}, fmt.Errorf("reconcile reboot request: %w", err)
 		}
 	}
 
@@ -347,15 +356,10 @@ func (r *McuNodeReconciler) reconcileTLSCert(ctx context.Context, node *v1alpha1
 		return nil // déjà appliqué
 	}
 
-	tokenNS := node.Spec.TokenRef.Namespace
-	if tokenNS == "" {
-		tokenNS = node.Namespace
-	}
-	var tokenSecret corev1.Secret
-	if err := r.Get(ctx, client.ObjectKey{Name: node.Spec.TokenRef.Name, Namespace: tokenNS}, &tokenSecret); err != nil {
+	token, err := r.currentToken(ctx, node)
+	if err != nil {
 		return client.IgnoreNotFound(err)
 	}
-	token := strings.TrimSpace(string(tokenSecret.Data["token"]))
 	if token == "" {
 		return nil
 	}
@@ -390,6 +394,71 @@ func (r *McuNodeReconciler) reconcileTLSCert(ctx context.Context, node *v1alpha1
 	logger.Info("certificat TLS mis à jour, device rebooté")
 	if r.Recorder != nil {
 		r.Recorder.Event(node, corev1.EventTypeNormal, "TLSCertRotated", "certificat TLS mis à jour, device rebooté")
+	}
+	return nil
+}
+
+// currentToken lit le token courant depuis Spec.TokenRef. Retourne "" (jamais une
+// erreur fatale) si TokenRef absent, Secret introuvable, ou token vide — le device
+// peut être temporairement mal configuré, on retente au prochain reconcile plutôt
+// que de faire échouer tout Reconcile() sur un problème transitoire.
+func (r *McuNodeReconciler) currentToken(ctx context.Context, node *v1alpha1.McuNode) (string, error) {
+	if node.Spec.TokenRef.Name == "" {
+		return "", nil // pas de support pour le Secret centralisé legacy (cf. reconcileTokenRotation)
+	}
+	ns := node.Spec.TokenRef.Namespace
+	if ns == "" {
+		ns = node.Namespace
+	}
+	var secret corev1.Secret
+	if err := r.Get(ctx, client.ObjectKey{Name: node.Spec.TokenRef.Name, Namespace: ns}, &secret); err != nil {
+		return "", client.IgnoreNotFound(err)
+	}
+	return strings.TrimSpace(string(secret.Data["token"])), nil
+}
+
+// reconcileRebootRequest déclenche POST /reboot à la demande, décorrélé de tout
+// autre flux (config, cert TLS, OTA) :
+//
+//	kubectl annotate mcunode <name> embewi.io/reboot-requested="$(date +%s)" --overwrite
+//
+// Pattern kubectl rollout restart : la valeur de l'annotation est un nonce opaque
+// (n'importe quelle chaîne qui change suffit, un timestamp est la convention la
+// plus lisible) comparée à Status.LastRebootRequested — différente → reboot, puis
+// mémorisée. Pas de nettoyage d'annotation requis : un nouveau `--overwrite` avec
+// une nouvelle valeur redéclenche naturellement.
+func (r *McuNodeReconciler) reconcileRebootRequest(ctx context.Context, node *v1alpha1.McuNode) error {
+	requested := node.Annotations[annotationRebootRequested]
+	if requested == "" || requested == node.Status.LastRebootRequested {
+		return nil
+	}
+	token, err := r.currentToken(ctx, node)
+	if err != nil {
+		return err
+	}
+	if token == "" {
+		return nil
+	}
+
+	logger := log.FromContext(ctx).WithValues("node", node.Spec.NodeID)
+	if err := agent.New(node.Status.IP, token).PostReboot(); err != nil {
+		logger.Info("POST /reboot (demandé) a échoué, nouvelle tentative au prochain reconcile", "error", err.Error())
+		if r.Recorder != nil {
+			r.Recorder.Eventf(node, corev1.EventTypeWarning, "RebootRequestFailed",
+				"POST /reboot a échoué : %v (nouvelle tentative au prochain reconcile)", err)
+		}
+		return nil
+	}
+
+	patch := client.MergeFrom(node.DeepCopy())
+	node.Status.LastRebootRequested = requested
+	if err := r.Status().Patch(ctx, node, patch); err != nil {
+		return fmt.Errorf("patch LastRebootRequested: %w", err)
+	}
+	logger.Info("reboot déclenché à la demande", "annotation", annotationRebootRequested)
+	if r.Recorder != nil {
+		r.Recorder.Event(node, corev1.EventTypeNormal, "RebootRequested",
+			"reboot déclenché à la demande (annotation "+annotationRebootRequested+")")
 	}
 	return nil
 }

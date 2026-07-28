@@ -100,6 +100,8 @@ spec:
                   type: string
                 tlsCertDigest:
                   type: string
+                lastRebootRequested:
+                  type: string
                 ready:
                   type: boolean
                 lastHeartbeat:
