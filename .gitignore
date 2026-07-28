@@ -40,3 +40,4 @@ tmp/
 *.swo
 *~
 docs/_build/
+docs/locale/**/*.mo

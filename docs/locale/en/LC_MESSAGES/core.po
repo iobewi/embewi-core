@@ -1,0 +1,2440 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, Embewi
+# This file is distributed under the same license as the Embewi Core
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: Embewi Core \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-28 17:13+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../core/agent-api.md:1
+msgid "API agent"
+msgstr ""
+
+#: ../../core/agent-api.md:3
+msgid "Ce document couvre les deux sens de communication entre Core et agent :"
+msgstr ""
+
+#: ../../core/agent-api.md:4
+msgid "**Core → Agent** : appels HTTP sortants du Core vers l'agent"
+msgstr ""
+
+#: ../../core/agent-api.md:5
+msgid "**Agent → Core** : flux entrants reçus par le serveur heartbeat"
+msgstr ""
+
+#: ../../core/agent-api.md:7
+msgid "Le contrat de référence reste `embewi-contract-v2.md`."
+msgstr ""
+
+#: ../../core/agent-api.md:9
+msgid ""
+"Version protocole : `v1alpha1` Transport : **HTTPS :443** "
+"Authentification : `Authorization: Bearer <token>` sur tous les "
+"endpoints."
+msgstr ""
+
+#: ../../core/agent-api.md:15
+msgid "`GET /v1alpha1/info`"
+msgstr ""
+
+#: ../../core/agent-api.md:17
+msgid ""
+"Identité matérielle, firmware courant et slot stagé (clé de l'idempotence"
+" OTA)."
+msgstr ""
+
+#: ../../core/agent-api.md:19 ../../core/agent-api.md:58
+#: ../../core/agent-api.md:190 ../../core/agent-api.md:226
+#: ../../core/agent-api.md:245
+msgid "**Réponse 200 :**"
+msgstr ""
+
+#: ../../core/agent-api.md ../../core/crd.md
+msgid "Champ"
+msgstr ""
+
+#: ../../core/agent-api.md ../../core/configuration.md ../../core/crd.md
+msgid "Description"
+msgstr ""
+
+#: ../../core/agent-api.md ../../core/controllers.md
+msgid "`staged.state`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`none` | `written` | `activating` — clé d'idempotence OTA (§6 contrat)"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`active_slot`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Partition active : `factory` | `ota_0` | `ota_1`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`app_port`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Port du service applicatif (NVS, défaut 8080)"
+msgstr ""
+
+#: ../../core/agent-api.md:54
+msgid "`GET /v1alpha1/health`"
+msgstr ""
+
+#: ../../core/agent-api.md:56
+msgid "État de santé local."
+msgstr ""
+
+#: ../../core/agent-api.md ../../core/crd.md
+msgid "`status`"
+msgstr ""
+
+#: ../../core/agent-api.md ../../core/crd.md
+msgid "Condition"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`ok`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`state == running`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`degraded`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`state == degraded`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`fail`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "tout autre état"
+msgstr ""
+
+#: ../../core/agent-api.md:80
+msgid "`POST /v1alpha1/ota/prepare`"
+msgstr ""
+
+#: ../../core/agent-api.md:82
+msgid ""
+"Le Core annonce le firmware avant tout transfert. L'ESP valide la "
+"compatibilité matérielle et réserve le slot inactif."
+msgstr ""
+
+#: ../../core/agent-api.md:85 ../../core/agent-api.md:169
+#: ../../core/agent-api.md:210 ../../core/agent-api.md:239
+msgid "**Corps de la requête :**"
+msgstr ""
+
+#: ../../core/agent-api.md:98
+msgid "**Réponse 200 — accepté :**"
+msgstr ""
+
+#: ../../core/agent-api.md:104
+msgid "**Réponse 200 — refusé :**"
+msgstr ""
+
+#: ../../core/agent-api.md ../../core/crd.md
+msgid "`reason`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Cause"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Event K8s"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`chip_mismatch`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`chip` != `CONFIG_IDF_TARGET`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`OTARejectedChip`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`layout_mismatch`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`partition_layout` != `embewi-ab-v1`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`OTARejectedLayout`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`idf_incompatible`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "version IDF incompatible"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`OTARejectedIdf`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`size_too_large`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`size` > taille partition inactive"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`OTARejectedSize`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`busy`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "OTA déjà en cours"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`OTABusy`"
+msgstr ""
+
+#: ../../core/agent-api.md:118
+msgid ""
+"Un refus métier légitime répond HTTP 200 avec le code dans le corps. Les "
+"`4xx/5xx` sont des erreurs de protocole."
+msgstr ""
+
+#: ../../core/agent-api.md:123
+msgid "`PUT /v1alpha1/ota/write`"
+msgstr ""
+
+#: ../../core/agent-api.md:125
+msgid ""
+"Stream du binaire `.bin` brut vers le slot inactif. L'ESP calcule le "
+"SHA-256 en incrémental et compare au digest annoncé."
+msgstr ""
+
+#: ../../core/agent-api.md:128
+msgid "**Headers requis :**"
+msgstr ""
+
+#: ../../core/agent-api.md:138
+msgid "**Corps :** binaire `.bin` brut (pas base64, pas multipart)."
+msgstr ""
+
+#: ../../core/agent-api.md:140
+msgid "**Réponse 200 — succès :**"
+msgstr ""
+
+#: ../../core/agent-api.md:146
+msgid "**Réponse 200 — erreurs :**"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`digest_mismatch`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "SHA-256 final != digest annoncé"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`OTADigestMismatch`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`write_failed`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Erreur d'écriture flash"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`OTAWriteFailed`"
+msgstr ""
+
+#: ../../core/agent-api.md:153
+msgid "**Reprise sur `Content-Range` :**"
+msgstr ""
+
+#: ../../core/agent-api.md:159
+msgid "`start=0` ou header absent → nouvelle session"
+msgstr ""
+
+#: ../../core/agent-api.md:160
+msgid "`start>0` aligné sur `written` → reprise (CONTINUE)"
+msgstr ""
+
+#: ../../core/agent-api.md:161
+#, python-brace-format
+msgid ""
+"`start>0` désaligné → `416` avec "
+"`{\"error\":\"range_mismatch\",\"written\":N}`"
+msgstr ""
+
+#: ../../core/agent-api.md:165
+msgid "`POST /v1alpha1/ota/activate`"
+msgstr ""
+
+#: ../../core/agent-api.md:167
+msgid "Configure le prochain boot sur le slot écrit et redémarre."
+msgstr ""
+
+#: ../../core/agent-api.md:175
+msgid "**Réponse 200 (avant reboot) :**"
+msgstr ""
+
+#: ../../core/agent-api.md:181
+msgid ""
+"Après reboot, l'agent est en `pending_verify` (15 s). Si le self-check "
+"passe → `running` + `ota_validated=true`. Sinon → rollback bootloader "
+"automatique."
+msgstr ""
+
+#: ../../core/agent-api.md:186
+msgid "`GET /v1alpha1/config`"
+msgstr ""
+
+#: ../../core/agent-api.md:188
+msgid "Retourne la configuration NVS courante du device."
+msgstr ""
+
+#: ../../core/agent-api.md:205
+msgid "`POST /v1alpha1/config`"
+msgstr ""
+
+#: ../../core/agent-api.md:207
+msgid ""
+"Pousse une configuration runtime. L'agent stocke en NVS et incrémente "
+"`config_generation`. Les clés inconnues sont ignorées silencieusement."
+msgstr ""
+
+#: ../../core/agent-api.md:222
+msgid "Limites NVS à respecter (validées côté Core avant push) :"
+msgstr ""
+
+#: ../../core/agent-api.md:223
+msgid "Clé : 15 caractères max"
+msgstr ""
+
+#: ../../core/agent-api.md:224
+msgid "Valeur : 63 caractères max"
+msgstr ""
+
+#: ../../core/agent-api.md:234
+msgid "`POST /v1alpha1/token`"
+msgstr ""
+
+#: ../../core/agent-api.md:236
+msgid ""
+"Rotation du token Bearer. L'agent commite en NVS avant de répondre — "
+"atomicité garantie."
+msgstr ""
+
+#: ../../core/agent-api.md:251
+msgid "Séquence complète de rotation :"
+msgstr ""
+
+#: ../../core/agent-api.md:262
+msgid "Codes d'erreur HTTP"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Code"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Signification"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "200"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Succès (y compris les refus métier avec `accepted: false`)"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "400"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Body malformé ou champ manquant"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "401"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Token absent ou invalide"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "413"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Body trop grand"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "500"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Erreur interne ESP (NVS, OTA)"
+msgstr ""
+
+#: ../../core/agent-api.md:274
+msgid "Flux sortants Agent → Core"
+msgstr ""
+
+#: ../../core/agent-api.md:276 ../../core/architecture.md:54
+#: ../../core/controllers.md:270
+msgid "`POST /v1alpha1/heartbeat`"
+msgstr ""
+
+#: ../../core/agent-api.md:278
+msgid "Émis par l'agent toutes les **5 s**. Met à jour `McuNode.Status`."
+msgstr ""
+
+#: ../../core/agent-api.md:298
+msgid ""
+"Champs requis : `node_id`, `ip`, `ts`, `state`, `ota_validated`, "
+"`config_generation`."
+msgstr ""
+
+#: ../../core/agent-api.md:300
+msgid "Notes :"
+msgstr ""
+
+#: ../../core/agent-api.md:301
+msgid ""
+"`ip` est la source de vérité pour `EndpointSlice.addresses` — l'IP TCP "
+"source n'est pas fiable."
+msgstr ""
+
+#: ../../core/agent-api.md:302
+msgid ""
+"`temp_celsius = -127.0` → capteur indisponible, valeur filtrée (ni "
+"stockée ni métrique)."
+msgstr ""
+
+#: ../../core/agent-api.md:303
+msgid ""
+"`ts ≈ 0` → NTP pas encore synchronisé, pas d'alerte sur cette valeur "
+"seule."
+msgstr ""
+
+#: ../../core/agent-api.md:304
+msgid ""
+"Authentification : `Authorization: Bearer <token>` validé contre "
+"`spec.tokenRef`."
+msgstr ""
+
+#: ../../core/agent-api.md:306
+msgid "`wss://<ctrl_url>/v1alpha1/logs` (WebSocket)"
+msgstr ""
+
+#: ../../core/agent-api.md:308
+msgid ""
+"L'agent ouvre une connexion WS **cliente** (outbound) vers le Core. Le "
+"Core est serveur. Même adresse que `--heartbeat-address`."
+msgstr ""
+
+#: ../../core/agent-api.md:311
+msgid "**Format par frame :**"
+msgstr ""
+
+#: ../../core/agent-api.md ../../core/architecture.md
+msgid "`level`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`raw` | `info` | `warn` | `error` | `fatal`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "`workload`"
+msgstr ""
+
+#: ../../core/agent-api.md
+msgid "Identifiant de l'application embarquée"
+msgstr ""
+
+#: ../../core/agent-api.md:328
+msgid "**Comportement Core :**"
+msgstr ""
+
+#: ../../core/agent-api.md:330
+msgid "Upgrade HTTP → WebSocket automatique sur `/v1alpha1/logs`."
+msgstr ""
+
+#: ../../core/agent-api.md:331
+msgid ""
+"**Auth différée** sur le premier frame : `\"node\"` identifie le device, "
+"le Bearer header est validé contre `McuNodeSpec.TokenRef`."
+msgstr ""
+
+#: ../../core/agent-api.md:333
+msgid "Token invalide → close frame `1008 ClosePolicyViolation`."
+msgstr ""
+
+#: ../../core/agent-api.md:334
+msgid "Best-effort : pas de replay sur reconnexion (§5 contrat)."
+msgstr ""
+
+#: ../../core/agent-api.md:335
+msgid ""
+"Les logs `error`/`fatal` sont enregistrés au niveau `Error` du logger ; "
+"les autres au niveau `Info`."
+msgstr ""
+
+#: ../../core/agent-api.md:338 ../../core/architecture.md:92
+#: ../../core/controllers.md:288
+msgid "`POST /v1alpha1/logs`"
+msgstr ""
+
+#: ../../core/agent-api.md:340
+msgid ""
+"Fallback HTTP pour les événements OTA/lifecycle critiques. Même endpoint "
+"que le WebSocket — le serveur détecte l'upgrade automatiquement et route "
+"vers le bon handler."
+msgstr ""
+
+#: ../../core/architecture.md:1
+msgid "Architecture"
+msgstr ""
+
+#: ../../core/architecture.md:3
+msgid "Vue d'ensemble"
+msgstr ""
+
+#: ../../core/architecture.md:30
+msgid "**Deux flux :**"
+msgstr ""
+
+#: ../../core/architecture.md:32
+msgid ""
+"**Core → Agent** : requêtes HTTPS initiées par le Core vers l'agent. Le "
+"Core orchestre les phases OTA, pousse la config, lit l'état."
+msgstr ""
+
+#: ../../core/architecture.md:34
+msgid ""
+"**Agent → Core** : heartbeats et logs initiés par l'agent vers le "
+"heartbeat server. Le Core ne poll jamais l'agent pour connaître son état "
+"— il attend les heartbeats."
+msgstr ""
+
+#: ../../core/architecture.md:38
+msgid "Composants"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "Package"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "Rôle"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "`internal/controller/mcunode_controller.go`"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "Réconcilie McuNode : Service + EndpointSlice, pilotage `ready`"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "`internal/controller/mcudeployment_controller.go`"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "Machine d'état OTA : Binding → Pulling → … → Deployed"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "`internal/heartbeat/server.go`"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "Reçoit heartbeats et logs agent, patche McuNode.Status"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "`internal/oci/client.go`"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "Résolution manifeste OCI + stream blob sans buffer"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "`internal/agent/client.go`"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "Client HTTPS vers l'agent (prepare, write, activate, config)"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "`api/v1alpha1/`"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "Types CRD + DeepCopy générés"
+msgstr ""
+
+#: ../../core/architecture.md:49
+msgid "Heartbeat server"
+msgstr ""
+
+#: ../../core/architecture.md:51
+msgid ""
+"Serveur HTTP simple (flux interne cluster, pas HTTPS) qui reçoit les flux"
+" sortants agent. Adresse par défaut : `:8080`. Configuré via "
+"`--heartbeat-address`."
+msgstr ""
+
+#: ../../core/architecture.md:56
+msgid "Met à jour le `McuNode.Status` correspondant au `node_id` reçu."
+msgstr ""
+
+#: ../../core/architecture.md:58 ../../core/architecture.md:97
+msgid "**Corps attendu :**"
+msgstr ""
+
+#: ../../core/architecture.md:74
+msgid "**Comportement :**"
+msgstr ""
+
+#: ../../core/architecture.md:76
+msgid "Recherche le McuNode dont `spec.nodeId == node_id` (tous namespaces)."
+msgstr ""
+
+#: ../../core/architecture.md:77
+msgid ""
+"Extrait l'IP source depuis `RemoteAddr` — le champ `ip` du payload n'est "
+"pas utilisé comme source de vérité réseau (§5 contrat)."
+msgstr ""
+
+#: ../../core/architecture.md:79
+msgid ""
+"Patch `McuNode.Status` : ip, state, firmwareDigest, deploymentId, "
+"otaValidated, heapFree, rssi, uptimeMs, ready, lastHeartbeat."
+msgstr ""
+
+#: ../../core/architecture.md:81
+msgid ""
+"Répond toujours **200** — même si le McuNode est inconnu, pour ne pas "
+"crasher l'agent sur un 404."
+msgstr ""
+
+#: ../../core/architecture.md:84
+msgid "**`ready` calculé localement :**"
+msgstr ""
+
+#: ../../core/architecture.md:90
+msgid "Le McuNode reconciler affine ensuite avec le timeout heartbeat (30 s)."
+msgstr ""
+
+#: ../../core/architecture.md:94
+msgid ""
+"Reçoit les logs d'événements de l'agent. Pas de persistance — écriture "
+"dans le logger zap du controller."
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "Log zap produit"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "`fatal`"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "`logger.Error`"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "`error`"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "`info`"
+msgstr ""
+
+#: ../../core/architecture.md
+msgid "`logger.Info`"
+msgstr ""
+
+#: ../../core/architecture.md:115
+msgid ""
+"Répond toujours **200**. Les entrées JSON malformées sont absorbées "
+"silencieusement."
+msgstr ""
+
+#: ../../core/configuration.md:1 ../../core/design.md:140
+msgid "Configuration"
+msgstr ""
+
+#: ../../core/configuration.md:3
+msgid "Flags de démarrage"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Flag"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Défaut"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`--heartbeat-address`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`:8080`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Adresse d'écoute du serveur heartbeat/logs Agent→Core"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`--heartbeat-tls-cert`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`\"\"`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Chemin PEM du certificat TLS (vide = HTTP plain)"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`--heartbeat-tls-key`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Chemin PEM de la clé privée TLS"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`--metrics-bind-address`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`:8082`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Métriques Prometheus"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`--health-probe-address`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`:8083`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Health probes (`/healthz`, `/readyz`)"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`--token-secret`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`embewi-tokens`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Fallback Secret centralisé si `spec.tokenRef` absent"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`--leader-elect`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`false`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Activer l'élection de leader (multi-répliques)"
+msgstr ""
+
+#: ../../core/configuration.md:15
+msgid ""
+"En production, les devices MCU imposent HTTPS (§1 contrat) : configurer "
+"`--heartbeat-tls-cert` et `--heartbeat-tls-key`, ou terminer TLS à "
+"l'ingress."
+msgstr ""
+
+#: ../../core/configuration.md:18
+msgid "Variables d'environnement"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Variable"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`OCI_REGISTRY_USER`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Identifiant Basic auth pour le registre OCI"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`OCI_REGISTRY_PASS`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Mot de passe Basic auth"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`OCI_INSECURE_TLS`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`true` → skip vérification TLS (registre auto-signé)"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`OCI_TRUSTED_PUBLIC_KEY`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid ""
+"Clé publique Ed25519 (base64, 32 octets) — active la vérification de "
+"signature des images firmware (§1/§9 contrat). Absente = désactivée"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`KUBECONFIG`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Chemin kubeconfig (hors cluster) — défaut `~/.kube/config`"
+msgstr ""
+
+#: ../../core/configuration.md:28
+msgid "Constantes internes"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Constante"
+msgstr ""
+
+#: ../../core/configuration.md ../../core/crd.md
+msgid "Valeur"
+msgstr ""
+
+#: ../../core/configuration.md ../../core/crd.md
+msgid "`HeartbeatTimeout`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "**10 s**"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Délai sans heartbeat → `ready=false` (2 × période agent 5 s, §8a contrat)"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "`ConfirmTimeout`"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "2 min"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Délai max pour confirmation après activate (§3 contrat)"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Requeue Pulling error"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "30 s"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Retry si registre OCI injoignable"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Requeue Preparing/Activating error"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "15 s"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Retry si agent MCU injoignable"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Requeue Writing error"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Retry si stream OCI ou write agent échoue"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Requeue Confirming"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "10 s"
+msgstr ""
+
+#: ../../core/configuration.md
+msgid "Polling heartbeat en phase Confirming"
+msgstr ""
+
+#: ../../core/configuration.md:39
+msgid "Token Bearer — Secret par device"
+msgstr ""
+
+#: ../../core/configuration.md:41
+msgid ""
+"Chaque device a un token Bearer unique (§1 contrat). Le Core le charge "
+"depuis un Secret Kubernetes référencé dans `McuNodeSpec.TokenRef` — **un "
+"Secret par device**."
+msgstr ""
+
+#: ../../core/configuration.md:65
+msgid ""
+"Le token est rechargé à chaque appel `nodeClient()` — pas de cache en "
+"mémoire."
+msgstr ""
+
+#: ../../core/configuration.md:67
+msgid "Fallback Secret centralisé (migration)"
+msgstr ""
+
+#: ../../core/configuration.md:69
+msgid ""
+"Si `spec.tokenRef.name` est vide (McuNodes créés avant la v0.x), le Core "
+"utilise le Secret centralisé `--token-secret` (défaut `embewi-tokens`) "
+"avec `nodeId` comme clé :"
+msgstr ""
+
+#: ../../core/configuration.md:85
+msgid ""
+"Migrer vers `spec.tokenRef` est recommandé — le Secret centralisé est "
+"maintenu pour compatibilité ascendante uniquement."
+msgstr ""
+
+#: ../../core/controllers.md:1
+msgid "Contrôleurs"
+msgstr ""
+
+#: ../../core/controllers.md:3
+msgid "McuNode reconciler"
+msgstr ""
+
+#: ../../core/controllers.md:5
+msgid ""
+"Déclenché à chaque modification d'un McuNode "
+"(`internal/controller/mcunode_controller.go`)."
+msgstr ""
+
+#: ../../core/controllers.md:7
+msgid "Pilotage de `ready`"
+msgstr ""
+
+#: ../../core/controllers.md:13
+msgid ""
+"Si `wantReady` ou `state` change → patch status. La condition est "
+"réévaluée toutes les **10 s** via `RequeueAfter` (= `HeartbeatTimeout`)."
+msgstr ""
+
+#: ../../core/controllers.md:16
+msgid "Cas de passage à `ready=false` :"
+msgstr ""
+
+#: ../../core/controllers.md:17
+msgid "Heartbeat silencieux depuis > 10 s → `state` basculé en `offline`"
+msgstr ""
+
+#: ../../core/controllers.md:18
+msgid "`state` ≠ `running` (pending_verify, degraded, rollback, failed)"
+msgstr ""
+
+#: ../../core/controllers.md:19
+msgid "`otaValidated == false`"
+msgstr ""
+
+#: ../../core/controllers.md:21
+msgid "Service selectorless"
+msgstr ""
+
+#: ../../core/controllers.md:23
+msgid "Créé ou mis à jour pour chaque McuNode ayant une IP :"
+msgstr ""
+
+#: ../../core/controllers.md:42
+msgid "EndpointSlice"
+msgstr ""
+
+#: ../../core/controllers.md:63
+msgid ""
+"`ready` suit `McuNode.Status.Ready` — jamais statique. C'est le seul "
+"signal réseau que le cluster utilise pour savoir si l'ESP est "
+"opérationnel."
+msgstr ""
+
+#: ../../core/controllers.md:66
+msgid ""
+"Le McuNode est défini comme **owner** du Service et de l'EndpointSlice "
+"via `controllerutil.SetControllerReference` — suppression en cascade "
+"automatique."
+msgstr ""
+
+#: ../../core/controllers.md:69
+msgid "Rotation de certificat TLS (`POST /tls/cert`)"
+msgstr ""
+
+#: ../../core/controllers.md:71
+msgid ""
+"Si `spec.tlsSecretRef` référence un Secret `kubernetes.io/tls` (clés "
+"`tls.crt`/ `tls.key` — compatible cert-manager), le reconciler compare "
+"son contenu à `Status.TLSCertDigest` (sha256, suivi Core-side : "
+"contrairement à la config §4a, le protocole n'expose aucun digest de cert"
+" via `GET /info`). Différent → `POST /tls/cert` puis `POST /reboot` "
+"(effectif au prochain `embewi_http_start()`), puis `Status.TLSCertDigest`"
+" mis à jour. Absent = l'agent garde son certificat auto-signé de build."
+msgstr ""
+
+#: ../../core/controllers.md:79
+msgid "Reboot à la demande (annotation)"
+msgstr ""
+
+#: ../../core/controllers.md:81
+msgid ""
+"Pas d'équivalent `kubectl rollout restart` natif pour un CRD (ce verbe ne"
+" s'applique qu'aux `deployment`/`daemonset`/`statefulset`). Même pattern "
+"reproduit via une annotation :"
+msgstr ""
+
+#: ../../core/controllers.md:90
+msgid ""
+"Valeur comparée à `Status.LastRebootRequested` — différente (nonce "
+"opaque, n'importe quelle chaîne convient) → `POST /reboot`, puis "
+"mémorisée. Pas de nettoyage d'annotation requis : un nouveau "
+"`--overwrite` avec une valeur différente redéclenche naturellement. "
+"Découplé de toute autre réconciliation (config, cert TLS, OTA) — action "
+"ponctuelle et explicite uniquement."
+msgstr ""
+
+#: ../../core/controllers.md:96
+msgid ""
+"`delete McuNode` ne déclenche volontairement **aucune** action physique "
+"sur le device — même logique que `kubectl delete node` en K8s natif, qui "
+"ne touche pas à la VM/machine sous-jacente : le CRD représente le device,"
+" il ne le possède pas."
+msgstr ""
+
+#: ../../core/controllers.md:103
+msgid "McuDeployment reconciler"
+msgstr ""
+
+#: ../../core/controllers.md:105
+msgid ""
+"Machine d'état pilotée par `Status.Phase` "
+"(`internal/controller/mcudeployment_controller.go`). Chaque appel à "
+"`Reconcile` exécute exactement une phase, puis requeue."
+msgstr ""
+
+#: ../../core/controllers.md:109
+msgid "Phase Binding"
+msgstr ""
+
+#: ../../core/controllers.md:111
+msgid ""
+"Résout le McuNode cible selon `spec.nodeName` (prioritaire) ou "
+"`spec.nodeSelector`."
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "Résultat"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "Phase suivante"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "Erreur"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "Exactement 1 match, libre"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "Pulling"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "—"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "0 match"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "Failed"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "`NoDeviceMatched`"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "> 1 match"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "`AmbiguousBinding`"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "1 match, déjà occupé"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "`DeviceBusy`"
+msgstr ""
+
+#: ../../core/controllers.md:120
+msgid ""
+"Un node est « occupé » si un autre McuDeployment (non Deployed/Failed) "
+"référence déjà `status.boundNode`."
+msgstr ""
+
+#: ../../core/controllers.md:123
+msgid "Phase Pulling"
+msgstr ""
+
+#: ../../core/controllers.md:125
+msgid "Résout le manifeste OCI depuis `spec.firmware.image`."
+msgstr ""
+
+#: ../../core/controllers.md:127
+msgid "Appelle `GET /v2/<repo>/manifests/<tag>` sur le registre."
+msgstr ""
+
+#: ../../core/controllers.md:128
+msgid ""
+"Cherche la layer `application/vnd.embewi.firmware.bin` (fallback : "
+"première layer)."
+msgstr ""
+
+#: ../../core/controllers.md:129
+msgid "Stocke dans Status : `digest`, `size`, `deploymentId = string(dep.UID)`."
+msgstr ""
+
+#: ../../core/controllers.md:130
+msgid "Passe en **Preparing**."
+msgstr ""
+
+#: ../../core/controllers.md:132
+msgid "En cas d'erreur registre → requeue dans **30 s**."
+msgstr ""
+
+#: ../../core/controllers.md:134
+msgid "Phase Preparing"
+msgstr ""
+
+#: ../../core/controllers.md:136
+msgid ""
+"Si `spec.configMapRef` renseigné : pousse la config **avant** l'OTA (§6 "
+"contrat). En cas d'erreur permanente (clé > 15 chars, CM introuvable) → "
+"`Failed/ConfigInvalid`."
+msgstr ""
+
+#: ../../core/controllers.md:139
+msgid ""
+"Lit `GET /v1alpha1/info` pour idempotence (§6 contrat). Persiste aussi "
+"`chip`, `idfVersion`, `flashSize`, `ramSize`, `appPort` dans "
+"`McuNode.Status` :"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "`staged.deploymentId`"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "Décision"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "`activating`"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "== current"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "→ skip → **Confirming**"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "`written` + digest match"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "→ skip → **Activating**"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "autre"
+msgstr ""
+
+#: ../../core/controllers.md
+msgid "→ envoyer prepare"
+msgstr ""
+
+#: ../../core/controllers.md:148
+msgid "Envoie `POST /v1alpha1/ota/prepare` :"
+msgstr ""
+
+#: ../../core/controllers.md:162
+msgid "Si `accepted: false` → **Failed** + Event K8s (voir tableau §4b)."
+msgstr ""
+
+#: ../../core/controllers.md:163
+msgid "Si `accepted: true` → **Writing**."
+msgstr ""
+
+#: ../../core/controllers.md:165
+msgid "En cas d'erreur réseau → requeue dans **15 s**."
+msgstr ""
+
+#: ../../core/controllers.md:167
+msgid "Phase Writing"
+msgstr ""
+
+#: ../../core/controllers.md:169
+msgid ""
+"Ouvre un stream blob depuis le registre OCI (`GET "
+"/v2/<repo>/blobs/<digest>`)."
+msgstr ""
+
+#: ../../core/controllers.md:170
+msgid "Pipe le stream vers `PUT /v1alpha1/ota/write` avec les headers :"
+msgstr ""
+
+#: ../../core/controllers.md:181
+#, python-brace-format
+msgid "Vérifie que l'agent répond `{ \"status\": \"written\" }`."
+msgstr ""
+
+#: ../../core/controllers.md:182
+msgid "Passe en **Activating**."
+msgstr ""
+
+#: ../../core/controllers.md:184
+#, python-brace-format
+msgid ""
+"`Content-Range: bytes 0-{n-1}/{n}` signale une nouvelle session (§4 "
+"contrat). La reprise intra-session (start > 0) est supportée par l'agent "
+"mais pas encore implémentée côté Core (le retry repart de l'octet 0)."
+msgstr ""
+
+#: ../../core/controllers.md:188
+msgid ""
+"En cas d'erreur → requeue dans **30 s** (le slot inactif n'est pas "
+"corrompu — la prochaine Preparing détectera `staged.state`)."
+msgstr ""
+
+#: ../../core/controllers.md:191
+msgid "Phase Activating"
+msgstr ""
+
+#: ../../core/controllers.md:193
+msgid "Vérifie d'abord l'idempotence via `GET /v1alpha1/info` :"
+msgstr ""
+
+#: ../../core/controllers.md:195
+msgid ""
+"Si `staged.state == \"activating\"` ET bon `deploymentId` → activate déjà"
+" envoyé → skip directement **Confirming**"
+msgstr ""
+
+#: ../../core/controllers.md:196
+msgid ""
+"Si `state == \"pending_verify\"` → device en cours de self-check → skip "
+"directement **Confirming**"
+msgstr ""
+
+#: ../../core/controllers.md:197
+msgid "Sinon → envoie `POST /v1alpha1/ota/activate` :"
+msgstr ""
+
+#: ../../core/controllers.md:203
+msgid "L'agent répond avant de redémarrer. Passe en **Confirming**."
+msgstr ""
+
+#: ../../core/controllers.md:205
+msgid "En cas d'erreur → requeue dans **15 s**."
+msgstr ""
+
+#: ../../core/controllers.md:207
+msgid "Phase Confirming"
+msgstr ""
+
+#: ../../core/controllers.md:209
+msgid ""
+"Attend la confirmation via heartbeat. Réévalué toutes les **10 s**. "
+"Déclenché aussi immédiatement à chaque mise à jour du McuNode (watch)."
+msgstr ""
+
+#: ../../core/controllers.md:212
+msgid "Conditions de passage en **Deployed** :"
+msgstr ""
+
+#: ../../core/controllers.md:220
+msgid "Conditions de passage en **Failed** :"
+msgstr ""
+
+#: ../../core/controllers.md:222
+#, python-brace-format
+msgid ""
+"`node.status.state ∈ { \"failed\", \"rollback\", \"degraded\" }` → "
+"`DeviceRollback`"
+msgstr ""
+
+#: ../../core/controllers.md:223
+msgid ""
+"Annotation `embewi.io/confirming-since` dépasse **2 minutes** → "
+"`ConfirmTimeout`"
+msgstr ""
+
+#: ../../core/controllers.md:225
+msgid ""
+"**Timeout négatif horodaté :** au premier passage en Confirming, "
+"l'annotation `embewi.io/confirming-since` est posée avec le timestamp "
+"RFC3339 courant. Cette annotation persiste entre les cycles de "
+"réconciliation — le timer ne repart pas à zéro si le Core redémarre."
+msgstr ""
+
+#: ../../core/controllers.md:230
+msgid "Phase Deployed"
+msgstr ""
+
+#: ../../core/controllers.md:232
+msgid ""
+"La réconciliation **n'est pas terminale** en phase Deployed. Le "
+"reconciler surveille :"
+msgstr ""
+
+#: ../../core/controllers.md:234
+msgid ""
+"**`Available/HeartbeatTimeout`** : si le McuNode perd ses heartbeats (> "
+"10 s), `Available` passe à `False/HeartbeatTimeout`. Reprend à "
+"`WorkloadReady` dès que les heartbeats reprennent. Déclenché par le watch"
+" McuNode."
+msgstr ""
+
+#: ../../core/controllers.md:238
+msgid ""
+"**Config drift** (si `spec.configMapRef` renseigné) : si le McuConfigMap "
+"change, la config est re-poussée et le device reboot. Déclenché par le "
+"watch McuConfigMap."
+msgstr ""
+
+#: ../../core/controllers.md:241
+msgid ""
+"**Port applicatif** (si `spec.appPort` renseigné, `POST /app/port`) : si "
+"`spec.appPort` diverge de `McuNode.Status.AppPort` (port observé, peuplé "
+"depuis `GET /info`), le nouveau port est poussé. **Pas de reboot** : "
+"l'agent redémarre son service app à chaud. `Status.AppPort` est mis à "
+"jour immédiatement après le push confirmé — sans ça rien ne le "
+"rafraîchirait en phase Deployed (`GET /info` n'est appelé que pendant les"
+" phases OTA) et le port serait repoussé à chaque reconcile."
+msgstr ""
+
+#: ../../core/controllers.md:248
+msgid "Phase Failed"
+msgstr ""
+
+#: ../../core/controllers.md:250
+msgid ""
+"Terminale. Pour relancer un déploiement échoué, créer un nouvel objet "
+"McuDeployment."
+msgstr ""
+
+#: ../../core/controllers.md:252
+msgid "Condition Ready (synthétique)"
+msgstr ""
+
+#: ../../core/controllers.md:266
+msgid "Serveur heartbeat"
+msgstr ""
+
+#: ../../core/controllers.md:268
+msgid "(`internal/heartbeat/server.go`) — écoute les flux sortants Agent → Core."
+msgstr ""
+
+#: ../../core/controllers.md:272
+msgid ""
+"Reçu toutes les 5 s par device. Met à jour `McuNode.Status` : IP, state, "
+"otaValidated, métriques temps réel, conditions Provisioned/Ready."
+msgstr ""
+
+#: ../../core/controllers.md:275
+msgid ""
+"Authentification : Bearer token validé par comparaison temps-constant "
+"contre le Secret référencé dans `McuNodeSpec.TokenRef`."
+msgstr ""
+
+#: ../../core/controllers.md:278
+msgid "`wss://.../v1alpha1/logs` (WebSocket)"
+msgstr ""
+
+#: ../../core/controllers.md:280
+msgid ""
+"L'agent ouvre une connexion WS **cliente** (outbound) vers le Core. Le "
+"Core est serveur."
+msgstr ""
+
+#: ../../core/controllers.md:283
+msgid ""
+"Auth différée sur le premier frame : `\"node\"` identifie le device, le "
+"Bearer header est validé contre `spec.tokenRef`."
+msgstr ""
+
+#: ../../core/controllers.md:285
+msgid "Si token invalide : close frame `1008 ClosePolicyViolation`."
+msgstr ""
+
+#: ../../core/controllers.md:286
+msgid "Best-effort : pas de replay sur reconnexion."
+msgstr ""
+
+#: ../../core/controllers.md:290
+msgid ""
+"Fallback HTTP pour les événements OTA/lifecycle critiques. Même path que "
+"le WS — le serveur détecte l'upgrade automatiquement."
+msgstr ""
+
+#: ../../core/crd.md:1
+msgid "CRD — Référence"
+msgstr ""
+
+#: ../../core/crd.md:3
+msgid "McuNode"
+msgstr ""
+
+#: ../../core/crd.md:5
+msgid ""
+"Représente un device MCU physique. Le status est **entièrement piloté par"
+" les heartbeats** — jamais édité manuellement."
+msgstr ""
+
+#: ../../core/crd.md:8 ../../core/crd.md:111
+msgid "Spec"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Requis"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`spec.nodeId`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Oui"
+msgstr ""
+
+#: ../../core/crd.md
+msgid ""
+"Identifiant unique du device. Doit correspondre exactement à "
+"`EMBEWI_NODE_ID` compilé dans le firmware. C'est la clé de réconciliation"
+" entre le heartbeat (`node_id`) et l'objet K8s."
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`spec.tokenRef.name`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Nom du Secret K8s contenant le token Bearer de ce device (§1 contrat)."
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`spec.tokenRef.namespace`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Non"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Namespace du Secret. Défaut : namespace du McuNode."
+msgstr ""
+
+#: ../../core/crd.md:32
+msgid ""
+"Le Secret référencé doit contenir **une clé `token`** dont la valeur est "
+"le token Bearer brut :"
+msgstr ""
+
+#: ../../core/crd.md:45 ../../core/crd.md:142
+msgid "Status"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Source"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`ip`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "heartbeat"
+msgstr ""
+
+#: ../../core/crd.md
+msgid ""
+"IP de management du device — source de vérité pour l'EndpointSlice (§8 "
+"contrat)"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`state`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid ""
+"État agent : `booting` `pending_verify` `running` `degraded` `rollback` "
+"`failed` `offline`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`firmwareDigest`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`sha256:<hex>` du firmware courant"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`deploymentId`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "ID du déploiement actuellement validé"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`otaValidated`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`true` uniquement après `mark_valid` sur le device"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`heapFree`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "RAM libre en octets"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`rssi`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Signal WiFi en dBm"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`chip` / `idfVersion` / `flashSize` / `ramSize`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "GET /info"
+msgstr ""
+
+#: ../../core/crd.md
+msgid ""
+"Capacités hardware — peuplées lors du premier contact OTA "
+"(`phasePreparing` / `phaseActivating`)"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`appPort`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Port du service applicatif MCU (utilisé par l'EndpointSlice)"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`ready`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "calculé"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`true` ssi `state==running && otaValidated && heartbeat<10s`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`lastHeartbeat`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Timestamp du dernier heartbeat reçu"
+msgstr ""
+
+#: ../../core/crd.md:82 ../../core/crd.md:176
+msgid "Conditions"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Déclencheur"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`Provisioned`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`ProvisioningComplete`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "True"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "heartbeat reçu, node_id + token établis"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`ProvisioningPending`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "False"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "aucun heartbeat, device non encore connecté"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`Ready`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`HeartbeatOK`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "heartbeat reçu, `state=running && ota_validated`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`DeviceNotReady`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "heartbeat reçu mais device pas encore prêt (`pending_verify`, etc.)"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "aucun heartbeat depuis > 10 s"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`NotProvisioned`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Unknown"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "jamais enrôlé"
+msgstr ""
+
+#: ../../core/crd.md:93 ../../core/crd.md:193
+msgid "Colonnes kubectl"
+msgstr ""
+
+#: ../../core/crd.md:107
+msgid "McuDeployment"
+msgstr ""
+
+#: ../../core/crd.md:109
+msgid ""
+"Décrit un déploiement de firmware sur un device MCU. Piloté par une "
+"machine d'état."
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`spec.nodeName`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Non¹"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Pin explicite sur un McuNode par nom K8s"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`spec.nodeSelector`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Sélection par labels — doit résoudre exactement 1 McuNode"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`spec.firmware.image`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Référence OCI complète (`registre/repo:tag`)"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`spec.firmware.name`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Nom du firmware pour matching avec l'agent"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`spec.firmware.version`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Version déclarée"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`spec.configMapRef`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Nom d'un McuConfigMap à pousser sur le device avant l'OTA"
+msgstr ""
+
+#: ../../core/crd.md:139
+msgid ""
+"¹ `nodeName` ou `nodeSelector` — l'un des deux doit être fourni. "
+"`nodeName` est recommandé (pin explicite, pas d'ambiguïté)."
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`phase`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Phase courante de la machine d'état"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`boundNode`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Nom K8s du McuNode résolu"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`string(dep.UID)` — clé d'idempotence transmise à l'agent"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`digest`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`sha256:<hex>` du blob firmware (issu du manifeste OCI)"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`size`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Taille en octets du blob (issu du manifeste OCI)"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`message`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Dernier message d'état ou d'erreur lisible"
+msgstr ""
+
+#: ../../core/crd.md:163
+msgid "Phases"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`Progressing`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`OTAInProgress`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "phases Binding → Confirming"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`DeploymentComplete`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "OTA terminé, firmware stable"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`OTAFailed`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "rollback ou état failed"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`Available`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`WorkloadReady`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "phase Deployed, heartbeat OK"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`PendingVerification`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "phase Confirming"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`DeviceDegraded`"
+msgstr ""
+
+#: ../../core/crd.md
+#, python-brace-format
+msgid "state ∈ {degraded, rollback, failed}"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "device plus joignable (phase Deployed)"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "**`Ready`**"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`DeploymentReady`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "**True**"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "**`Progressing=False` ET `Available=True`**"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`DeploymentNotReady`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "OTA en cours ou device non disponible"
+msgstr ""
+
+#: ../../core/crd.md:190
+msgid ""
+"`Ready` est une condition **synthétique** : `kubectl wait mcudeployment/x"
+" --for=condition=Ready` est la façon recommandée d'attendre la fin d'un "
+"déploiement."
+msgstr ""
+
+#: ../../core/crd.md:203
+msgid "McuConfigMap"
+msgstr ""
+
+#: ../../core/crd.md:205
+msgid "Configuration runtime à pousser sur un device via `POST /v1alpha1/config`."
+msgstr ""
+
+#: ../../core/crd.md ../../core/design.md
+msgid "Contrainte"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Comportement si dépassée"
+msgstr ""
+
+#: ../../core/crd.md ../../core/design.md
+msgid "Longueur clé"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "≤ 15 caractères"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "McuDeployment → `Failed/ConfigInvalid`"
+msgstr ""
+
+#: ../../core/crd.md ../../core/design.md
+msgid "Longueur valeur"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "≤ 63 caractères"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Préfixe clé `_`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Réservé agent"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Filtré silencieusement avant push"
+msgstr ""
+
+#: ../../core/crd.md:225
+msgid ""
+"Lorsqu'un `McuConfigMap` est modifié, tous les `McuDeployment` en phase "
+"`Deployed` qui le référencent sont réconciliés automatiquement : la "
+"config est poussée et le device reboot si le NVS diverge."
+msgstr ""
+
+#: ../../core/crd.md:231
+msgid "Ressources créées automatiquement"
+msgstr ""
+
+#: ../../core/crd.md:233
+msgid ""
+"Pour chaque McuNode avec une IP connue, le controller crée dans le même "
+"namespace :"
+msgstr ""
+
+#: ../../core/crd.md ../../core/design.md:24
+msgid "Ressource"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Nom"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Contenu"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`Service`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`embewi-<node-name>`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "Port `status.appPort` (défaut 8080), selectorless"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "`EndpointSlice`"
+msgstr ""
+
+#: ../../core/crd.md
+msgid "IP Agent, `ready=status.ready`"
+msgstr ""
+
+#: ../../core/crd.md:240
+msgid ""
+"Ces ressources ont le McuNode comme **owner** (OwnerReference) — elles "
+"sont supprimées automatiquement si le McuNode est supprimé."
+msgstr ""
+
+#: ../../core/design.md:1
+msgid "Embewi — Notes de conception Core (hors frontière agent)"
+msgstr ""
+
+#: ../../core/design.md:3
+msgid ""
+"**Portée.** Ce document décrit des fonctionnalités **purement côté Core**"
+" (runtime Kubernetes, repo séparé). Elles ne touchent **pas** le contrat "
+"Core ↔ Agent (`embewi-contract-v2.md`) : l'agent embarqué les ignore. "
+"Elles sont documentées ici pour la continuité de conception et pour être "
+"reprises dans le repo Core."
+msgstr ""
+
+#: ../../core/design.md:9
+msgid ""
+"Convention : **[CORE-INTERNE]** = design interne au Core, pas une "
+"contrainte de la frontière. Les références `§N` pointent vers `embewi-"
+"contract-v2.md`."
+msgstr ""
+
+#: ../../core/design.md:14
+msgid "1. Rollout de flotte — `McuDeploymentSet` **[CORE-INTERNE]**"
+msgstr ""
+
+#: ../../core/design.md:16
+msgid "Problème"
+msgstr ""
+
+#: ../../core/design.md:18
+msgid ""
+"Le contrat fige `1 McuDeployment = 1 device physique` (§7, affinité "
+"matérielle). C'est correct au niveau atomique, mais une flotte de N "
+"devices **identiquement câblés** (ex. 50 `wheel-controller`) ne peut pas "
+"se mettre à jour device par device à la main : il faut un objet "
+"d'orchestration au-dessus, façon `DaemonSet`/`Deployment`, qui génère et "
+"pilote les `McuDeployment` unitaires."
+msgstr ""
+
+#: ../../core/design.md:62
+msgid ""
+"`maxSurge` est **toujours 0** : contrairement aux Pods, on ne peut pas "
+"créer un device « en plus » pour absorber la transition — le matériel est"
+" fixe. Le rollout joue donc uniquement sur `maxUnavailable`."
+msgstr ""
+
+#: ../../core/design.md:66
+msgid "Boucle d'orchestration"
+msgstr ""
+
+#: ../../core/design.md:68
+msgid ""
+"Le contrôleur `McuDeploymentSet` **ne parle jamais au device** : il "
+"manipule des `McuDeployment` et lit leur statut, qui dérive lui-même des "
+"signaux agent du contrat (§3, §8)."
+msgstr ""
+
+#: ../../core/design.md:92
+msgid "Réutilisation du contrat existant — rien à ajouter côté agent"
+msgstr ""
+
+#: ../../core/design.md
+msgid "Besoin rollout"
+msgstr ""
+
+#: ../../core/design.md
+msgid "Signal agent déjà au contrat"
+msgstr ""
+
+#: ../../core/design.md
+msgid "« le device a fini son OTA ?»"
+msgstr ""
+
+#: ../../core/design.md
+msgid ""
+"heartbeat `state=running` + `ota_validated=true` + `deployment_id` (§3, "
+"§5)"
+msgstr ""
+
+#: ../../core/design.md
+msgid "« l'OTA a échoué ?»"
+msgstr ""
+
+#: ../../core/design.md
+msgid ""
+"timeout négatif → `Failed` (§3) ; le Core **constate**, l'agent a déjà "
+"rollback"
+msgstr ""
+
+#: ../../core/design.md
+msgid "« le device est routable ?»"
+msgstr ""
+
+#: ../../core/design.md
+msgid "EndpointSlice `ready` piloté par heartbeat (§8)"
+msgstr ""
+
+#: ../../core/design.md
+msgid "« quelle version tourne ?»"
+msgstr ""
+
+#: ../../core/design.md
+msgid "`firmware_digest` heartbeat + `GET /info` (§4, §5)"
+msgstr ""
+
+#: ../../core/design.md:101
+msgid ""
+"Le rollback automatique de flotte = le Core arrête d'avancer et "
+"**ré-pousse l'ancienne image** sur les devices déjà migrés. Ce n'est "
+"**pas** le rollback bootloader (§3) : celui-là est local et instantané "
+"par device. Les deux coexistent — bootloader = filet par device, "
+"`McuDeploymentSet` = politique de flotte."
+msgstr ""
+
+#: ../../core/design.md:107
+msgid "Points de vigilance"
+msgstr ""
+
+#: ../../core/design.md:109
+msgid ""
+"**Idempotence** (§6) : un device peut déjà être à la bonne version (re-"
+"réconcile après crash Core) → ne pas le recompter comme « en cours de "
+"mise à jour »."
+msgstr ""
+
+#: ../../core/design.md:111
+msgid ""
+"**Canary sur device unique** : un step `setWeight: 1` choisit **quel** "
+"device en premier — privilégier un device de test étiqueté (`canary: "
+"\"true\"`), pas un aléatoire en production."
+msgstr ""
+
+#: ../../core/design.md:114
+msgid ""
+"**Devices NATés** (annexe contrat, OTA pull) : un device injoignable en "
+"push ne peut pas être migré → le compter en `unavailable`, pas en "
+"`failed`."
+msgstr ""
+
+#: ../../core/design.md:119
+msgid "2. Webhook de validation `McuConfigMap` **[CORE-INTERNE]**"
+msgstr ""
+
+#: ../../core/design.md:121
+msgid "Pourquoi un webhook et pas le contrôleur"
+msgstr ""
+
+#: ../../core/design.md:123
+msgid ""
+"Le contrat §9 attribue au Core « valide la sémantique des valeurs config "
+"» et §4a précise « l'agent ne valide pas, il stocke et expose ». Faire "
+"cette validation dans le **contrôleur** de réconciliation est trop tard :"
+" une valeur invalide est déjà persistée dans l'`etcd` et un `kubectl "
+"apply` réussit sans erreur visible. Un **ValidatingAdmissionWebhook** "
+"rejette à l'admission — l'erreur remonte directement à l'utilisateur de "
+"`kubectl`."
+msgstr ""
+
+#: ../../core/design.md:161
+msgid "Règles de validation"
+msgstr ""
+
+#: ../../core/design.md:163
+msgid ""
+"L'agent traite toutes les valeurs comme des **chaînes opaques** (§4a) ; "
+"c'est le webhook qui porte la connaissance sémantique. Validation par "
+"profil de SoC, car les GPIO valides dépendent de la cible :"
+msgstr ""
+
+#: ../../core/design.md:182
+msgid ""
+"**Dépendance au SoC cible.** La plage GPIO dépend du device visé. Le "
+"webhook doit résoudre `configMapRef` → `McuDeployment` → "
+"`McuNode.spec.chip` pour choisir le bon profil. Si le `McuConfigMap` est "
+"**partagé** entre plusieurs déploiements de SoC différents, valider "
+"contre **l'intersection** des plages (ou refuser le partage cross-SoC — "
+"décision Core)."
+msgstr ""
+
+#: ../../core/design.md:188
+msgid "Limites volontaires (alignées sur les buffers agent)"
+msgstr ""
+
+#: ../../core/design.md:190
+msgid ""
+"Ces bornes ne sont pas arbitraires : elles reflètent les tailles de "
+"buffer de l'agent (`embewi_http.c`, parser `json_data_iter`). Le webhook "
+"**doit** les faire respecter sinon l'agent tronque silencieusement :"
+msgstr ""
+
+#: ../../core/design.md
+msgid "Limite"
+msgstr ""
+
+#: ../../core/design.md
+msgid "Origine"
+msgstr ""
+
+#: ../../core/design.md
+msgid "31"
+msgstr ""
+
+#: ../../core/design.md
+msgid "`k[32]` dans le parser POST /config"
+msgstr ""
+
+#: ../../core/design.md
+msgid "63"
+msgstr ""
+
+#: ../../core/design.md
+msgid "`v[64]` dans le parser POST /config"
+msgstr ""
+
+#: ../../core/design.md
+msgid "Taille du batch"
+msgstr ""
+
+#: ../../core/design.md
+msgid "~1 KB"
+msgstr ""
+
+#: ../../core/design.md
+msgid "`BODY_MAX` du serveur HTTP de l'agent"
+msgstr ""
+
+#: ../../core/design.md:200
+msgid ""
+"Tout changement de ces buffers côté agent **doit** être répercuté ici — "
+"c'est le seul couplage implicite entre ce design Core et le firmware. À "
+"surveiller en revue croisée des deux repos."
+msgstr ""
+
+#: ../../core/design.md:206
+msgid "Voir aussi"
+msgstr ""
+
+#: ../../core/design.md:208
+msgid "`embewi-contract-v2.md` — contrat normatif de la frontière Core ↔ Agent."
+msgstr ""
+
+#: ../../core/design.md:209
+msgid ""
+"Réserve contrat (annexe) : `McuConfigMap` versionné, multi-workload, "
+"préemption, Virtual Kubelet provider — autant de features Core à "
+"détailler ici le moment venu."
+msgstr ""
+
+#: ../../core/oci.md:1
+msgid "Client OCI"
+msgstr ""
+
+#: ../../core/oci.md:3
+msgid ""
+"Package `internal/oci`. Utilise l'OCI Distribution Spec HTTP directement,"
+" sans bibliothèque externe lourde."
+msgstr ""
+
+#: ../../core/oci.md:6
+msgid "Résolution de manifeste"
+msgstr ""
+
+#: ../../core/oci.md:15
+msgid ""
+"Extrait la layer `application/vnd.embewi.firmware.bin`. Si absente, prend"
+" la première layer (fallback permissif pour push simplifié)."
+msgstr ""
+
+#: ../../core/oci.md:18
+msgid "Annotations lues (sur la layer, ou sur le manifeste en fallback) :"
+msgstr ""
+
+#: ../../core/oci.md:20
+msgid "`embewi.io/chip` — ex: `esp32c3`"
+msgstr ""
+
+#: ../../core/oci.md:21
+msgid "`embewi.io/idf-version` — ex: `v6.0.0`"
+msgstr ""
+
+#: ../../core/oci.md:23
+msgid "Stream de blob"
+msgstr ""
+
+#: ../../core/oci.md:29
+msgid ""
+"Retourne un `*oci.BlobStream` (implémente `io.ReadCloser`) — le blob est "
+"streamé directement vers l'ESP sans buffer en mémoire. La taille des "
+"firmwares (typiquement ~1 Mo) ne justifie pas un buffer intermédiaire."
+msgstr ""
+
+#: ../../core/oci.md:33
+msgid ""
+"`BlobStream` re-hache les octets au fil de la lecture et les compare au "
+"digest attendu (§1/§9 contrat — `ResolveFirmware` se contente de lire le "
+"digest *déclaré* par le registre, sans jamais le recalculer ; "
+"`StreamBlob` referme cette boucle). Appeler `Err()` **après** avoir "
+"intégralement consommé le flux pour connaître le résultat — `nil` si la "
+"lecture n'est pas allée jusqu'au bout ou si le digest correspond, "
+"`oci.ErrBlobDigestMismatch` sinon."
+msgstr ""
+
+#: ../../core/oci.md:40
+msgid ""
+"`Close()` ne porte jamais cette erreur : le flux sert typiquement de "
+"corps à une requête HTTP sortante (`PUT /ota/write`), et le transport "
+"`net/http` appelle `Close()` lui-même après émission — un `Close()` en "
+"erreur y ferait échouer tout le round-trip, y compris une réponse déjà "
+"reçue avec succès. Le controller (`phaseWriting`, "
+"`mcudeployment_controller.go`) illustre l'usage : `OTAWrite` d'abord, "
+"`Close()` ensuite (ignoré), puis `Err()`."
+msgstr ""
+
+#: ../../core/oci.md:47
+msgid "Schéma attendu du manifeste OCI"
+msgstr ""
+
+#: ../../core/oci.md:70
+msgid "Protocole HTTP vs HTTPS"
+msgstr ""
+
+#: ../../core/oci.md
+msgid "Registre"
+msgstr ""
+
+#: ../../core/oci.md
+msgid "Protocole"
+msgstr ""
+
+#: ../../core/oci.md
+msgid "`localhost` ou `127.x.x.x`"
+msgstr ""
+
+#: ../../core/oci.md
+msgid "HTTP automatique"
+msgstr ""
+
+#: ../../core/oci.md
+msgid "Tout autre hôte"
+msgstr ""
+
+#: ../../core/oci.md
+msgid "HTTPS"
+msgstr ""
+
+#: ../../core/oci.md:77
+msgid ""
+"Pour désactiver la vérification TLS (registre local auto-signé) : "
+"`OCI_INSECURE_TLS=true`."
+msgstr ""
+
+#: ../../core/oci.md:80
+msgid "Vérification de signature (rôle « efficacité », contrat §1/§9)"
+msgstr ""
+
+#: ../../core/oci.md:87
+msgid ""
+"Le Core **peut** vérifier une signature Ed25519 détachée avant de "
+"transférer un firmware, en plus de la validation du digest et de la "
+"compat chip/layout. Cette vérification est un étage d'efficacité (fail-"
+"fast avant OTA) — le bootloader Secure Boot v2 reste la seule racine de "
+"confiance réelle côté device (§1 contrat)."
+msgstr ""
+
+#: ../../core/oci.md:93
+msgid ""
+"Activation : `OCI_TRUSTED_PUBLIC_KEY` = clé publique Ed25519 brute (32 "
+"octets), encodée en base64. Absente = vérification désactivée (posture "
+"dev/MVP, comme `OCI_INSECURE_TLS`)."
+msgstr ""
+
+#: ../../core/oci.md:97
+msgid ""
+"Le manifeste doit alors porter une annotation `embewi.io/signature` : "
+"signature Ed25519 (base64) sur le digest de la layer firmware (le champ "
+"`digest` de la layer `application/vnd.embewi.firmware.bin`, pas le digest"
+" du manifeste lui-même) :"
+msgstr ""
+
+#: ../../core/oci.md:114
+msgid "Signer une image (hors périmètre Core — outillage de publication) :"
+msgstr ""
+
+#: ../../core/oci.md:121
+msgid ""
+"Si `OCI_TRUSTED_PUBLIC_KEY` est configurée, `ResolveFirmware` échoue avec"
+" `oci.ErrSignatureMissing` (annotation absente) ou "
+"`oci.ErrSignatureInvalid` (signature présente mais invalide, ou signée "
+"sur un autre digest — cas d'un manifeste trafiqué après signature)."
+msgstr ""
+
+#: ../../core/oci.md:126
+msgid ""
+"Cette vérification porte sur ce que le manifeste *déclare*. Combinée au "
+"re-hash du blob dans `StreamBlob` (ci-dessus), un registre compromis qui "
+"sert un blob substitué sous un digest annoncé identique à celui signé ne "
+"peut plus passer inaperçu : la signature protège le digest déclaré, le "
+"re-hash protège la correspondance digest↔octets réels."
+msgstr ""
+

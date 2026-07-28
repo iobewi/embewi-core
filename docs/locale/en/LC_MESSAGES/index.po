@@ -1,0 +1,126 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, Embewi
+# This file is distributed under the same license as the Embewi Core
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Embewi Core \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-28 17:13+0200\n"
+"PO-Revision-Date: 2026-07-28 17:13+0200\n"
+"Last-Translator: Embewi\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../index.md:18
+msgid "Architecture & heartbeat server"
+msgstr "Architecture & heartbeat server"
+
+#: ../../index.md:18
+msgid "CRD — McuNode, McuDeployment"
+msgstr "CRDs — McuNode, McuDeployment"
+
+#: ../../index.md:18
+msgid "Contrôleurs"
+msgstr "Controllers"
+
+#: ../../index.md:18
+msgid "Client OCI"
+msgstr "OCI client"
+
+#: ../../index.md:18
+msgid "API agent (Core ↔ Agent)"
+msgstr "Agent API (Core ↔ Agent)"
+
+#: ../../index.md:18
+msgid "Configuration"
+msgstr "Configuration"
+
+#: ../../index.md:18
+msgid "Design interne"
+msgstr "Internal design"
+
+#: ../../index.md:16 ../../index.md:18
+msgid "Core"
+msgstr "Core"
+
+#: ../../index.md:33
+msgid "Enrôler un device"
+msgstr "Enrolling a device"
+
+#: ../../index.md:33
+msgid "Déployer un firmware"
+msgstr "Deploying a firmware"
+
+#: ../../index.md:33
+msgid "Opérations courantes"
+msgstr "Common operations"
+
+#: ../../index.md:31 ../../index.md:33
+msgid "Utilisation"
+msgstr "Usage"
+
+#: ../../index.md:1
+msgid "Embewi Core — Documentation"
+msgstr "Embewi Core — Documentation"
+
+#: ../../index.md:3
+msgid ""
+"**Embewi Core** est le contrôleur Kubernetes qui pilote des MCU "
+"(microcontrôleurs) connectés via le [contrat "
+"`v1alpha1`](https://github.com/iobewi/embewi). Il gère le cycle de vie "
+"des firmwares (OTA), la configuration runtime et l'exposition des devices"
+" comme endpoints routables dans le cluster."
+msgstr ""
+"**Embewi Core** is the Kubernetes controller that drives connected MCUs "
+"(microcontrollers) via the [`v1alpha1` "
+"contract](https://github.com/iobewi/embewi). It manages firmware "
+"lifecycle (OTA), runtime configuration, and exposes devices as routable "
+"endpoints inside the cluster."
+
+#: ../../index.md:8
+msgid ""
+"L'implémentation agent actuelle cible ESP32/ESP-IDF, mais le contrat "
+"`v1alpha1` est indépendant du matériel — tout MCU capable de parler HTTPS"
+" peut être supporté."
+msgstr ""
+"The current agent implementation targets ESP32/ESP-IDF, but the "
+"`v1alpha1` contract is hardware-independent — any MCU capable of "
+"speaking HTTPS can be supported."
+
+#: ../../index.md:42
+msgid "Dépôts & docs système"
+msgstr "Repositories & system docs"
+
+#: ../../index.md:44
+msgid ""
+"**Contrat** — [`iobewi/embewi`](https://github.com/iobewi/embewi) : spec "
+"normative `v1alpha1` · [📖 doc](https://iobewi.github.io/embewi/)."
+msgstr ""
+"**Contract** — [`iobewi/embewi`](https://github.com/iobewi/embewi): "
+"normative `v1alpha1` spec · [📖 docs](https://iobewi.github.io/embewi/)."
+
+#: ../../index.md:46
+msgid ""
+"**Agent** — [`iobewi/embewi-agent-esp`](https://github.com/iobewi/embewi-"
+"agent-esp) : firmware ESP32/ESP-IDF · [📖 doc](https://iobewi.github.io"
+"/embewi-agent-esp/)."
+msgstr ""
+"**Agent** — [`iobewi/embewi-agent-esp`](https://github.com/iobewi/embewi-"
+"agent-esp): ESP32/ESP-IDF firmware · [📖 docs](https://iobewi.github.io"
+"/embewi-agent-esp/)."
+
+#: ../../index.md:48
+msgid ""
+"**Core** — [`iobewi/embewi-core`](https://github.com/iobewi/embewi-core) "
+": ce dépôt."
+msgstr ""
+"**Core** — [`iobewi/embewi-core`](https://github.com/iobewi/embewi-core)"
+": this repository."

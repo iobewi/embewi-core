@@ -1,0 +1,629 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, Embewi
+# This file is distributed under the same license as the Embewi Core
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: Embewi Core \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-28 17:13+0200\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../usage/deployer-un-firmware.md:1
+msgid "Déployer un firmware"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:3
+msgid ""
+"Un `McuDeployment` orchestre le transfert OTA d'un firmware depuis un "
+"registre OCI vers un MCU. Le Core gère toutes les phases automatiquement."
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:8
+msgid "1. Préparer l'image OCI"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:10
+msgid ""
+"Le firmware doit être publié dans un registre OCI avec le media type "
+"correct. La layer principale doit porter le media type "
+"`application/vnd.embewi.firmware.bin` et les annotations chip/IDF :"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:23
+msgid ""
+"Si les annotations sont absentes, le Core utilise les informations "
+"remontées par `GET /info` sur le device cible."
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:28
+msgid "2. Créer le McuDeployment"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:46
+msgid ""
+"`spec.nodeName` est la méthode recommandée (pin explicite). L'alternative"
+" `spec.nodeSelector` accepte des labels McuNode mais doit résoudre "
+"exactement un seul device — sinon le déploiement échoue en phase Binding."
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:52
+msgid "3. Suivre la progression"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:72
+msgid "4. Pousser une configuration (McuConfigMap)"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:74
+msgid ""
+"Avant ou après le firmware, on peut pousser une config runtime via un "
+"objet `McuConfigMap` référencé dans le McuDeployment."
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:91
+msgid "Puis référencer dans le McuDeployment :"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:101
+msgid "Limites NVS à respecter :"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:102
+msgid "Clé : 15 caractères max"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:103
+msgid "Valeur : 63 caractères max"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:107
+msgid "5. Diagnostiquer un déploiement Failed"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Message"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Cause probable"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Action"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "`NoDeviceMatched`"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "`spec.nodeName` incorrect"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Vérifier `kubectl get mcunode`"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "`DeviceBusy`"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Autre McuDeployment actif sur ce node"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Attendre ou supprimer l'autre"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "`prepare refusé: chip_mismatch`"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Firmware compilé pour un autre chip"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Rebuilder pour `esp32c3`"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "`stream blob: GET blob → HTTP 404`"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Image absente du registre"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Vérifier le registre OCI"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "`clé \"esp32-motor-left\" absente du secret`"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Token manquant"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Ajouter la clé dans `embewi-tokens`"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "`ConfirmTimeout`"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Device n'a pas rebooté ou rollback silencieux"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md ../../usage/operations.md:28
+msgid "Consulter les logs"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "`DeviceRollback`"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Self-check KO sur le device"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md
+msgid "Consulter les logs + heartbeat state"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:128
+msgid "6. Relancer un déploiement Failed"
+msgstr ""
+
+#: ../../usage/deployer-un-firmware.md:130
+msgid "Les phases `Failed` et `Deployed` sont terminales. Pour réessayer :"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:1
+msgid "Enrôler un device"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:3
+msgid ""
+"Un device ESP32 devient un `McuNode` après trois étapes : provisioning "
+"via le portail captif, création du Secret token, et création de l'objet "
+"K8s."
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:8
+msgid "1. Provisionner le device (premier boot)"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:10
+msgid ""
+"Au premier boot (NVS vide), l'agent démarre en mode AP WiFi (`embewi-"
+"XXXX`) et sert un portail captif sur `http://192.168.4.1`."
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:13
+msgid "**Champs du formulaire :**"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "Champ"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "Obligatoire"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "Description"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "`ssid`"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "Oui"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "SSID du réseau WiFi cible"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "`pass`"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "Non"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "Mot de passe WiFi"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "`ctrl_url`"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "URL du Core (`https://<IP-du-pod>:8080`)"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "`ip`"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "Non¹"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "IP statique du device (vide = DHCP)"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "`mask`"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "Masque réseau"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "`gw`"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "Passerelle"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "`token`"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md
+msgid "Token Bearer — généré aléatoirement si vide²"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:25
+msgid "¹ `ip`, `mask` et `gw` sont tous obligatoires ensemble si IP statique."
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:27
+msgid ""
+"² Le token généré est affiché **une seule fois** dans la page de "
+"confirmation — le noter immédiatement."
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:30
+msgid "**Page de confirmation :**"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:42
+msgid ""
+"Après reboot, le device se connecte au WiFi et commence à envoyer des "
+"heartbeats vers `ctrl_url`."
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:47
+msgid "2. Créer le Secret token du device"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:49
+msgid ""
+"Chaque device possède son **propre Secret** Kubernetes portant son token "
+"Bearer. Le Secret est référencé dans `McuNodeSpec.TokenRef` (§1 contrat)."
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:59
+msgid "Structure attendue du Secret :"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:72
+msgid ""
+"Le Secret doit être dans le **même namespace** que le McuNode (ou le "
+"namespace spécifié dans `spec.tokenRef.namespace`)."
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:77
+msgid "3. Créer le McuNode"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:97
+msgid ""
+"`spec.nodeId` doit correspondre **exactement** à `EMBEWI_NODE_ID` compilé"
+" dans le firmware — c'est la clé de réconciliation avec les heartbeats "
+"reçus."
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:102
+msgid "4. Vérifier l'état"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:104
+msgid "Dès que le device envoie son premier heartbeat, le status se peuple :"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:122
+msgid "Si `Ready` reste `false` après 15 secondes :"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:123
+msgid ""
+"Vérifier que `ctrl_url` pointe vers le pod Core (`kubectl get svc -n "
+"default`)"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:124
+msgid ""
+"Vérifier que `spec.nodeId` correspond exactement à `EMBEWI_NODE_ID` du "
+"firmware"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:125
+msgid ""
+"Vérifier que le Secret `esp32-motor-left-token` contient bien la clé "
+"`token`"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:126
+msgid "Consulter les logs du Core : `kubectl logs deployment/embewi-core`"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:130
+msgid "Rotation du token"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:132
+msgid "Pour changer le token Bearer d'un device sans interruption de service :"
+msgstr ""
+
+#: ../../usage/enroller-un-device.md:147
+msgid ""
+"La rotation atomique est garantie côté agent : le device commite le "
+"nouveau token en NVS avant de répondre — pas de fenêtre sans "
+"authentification."
+msgstr ""
+
+#: ../../usage/operations.md:1
+msgid "Opérations courantes"
+msgstr ""
+
+#: ../../usage/operations.md:3
+msgid "Vérifier le routage réseau"
+msgstr ""
+
+#: ../../usage/operations.md:5
+msgid ""
+"Le Core crée automatiquement un `Service` + `EndpointSlice` pour chaque "
+"McuNode avec une IP. Le flag `ready` de l'EndpointSlice suit l'état du "
+"device en temps réel."
+msgstr ""
+
+#: ../../usage/operations.md:16
+msgid "Accéder au service applicatif ESP depuis le cluster :"
+msgstr ""
+
+#: ../../usage/operations.md:23
+msgid ""
+"Le port est celui retourné par `GET /info` (`app_port`, défaut 8080). Il "
+"est stocké dans `McuNode.Status.AppPort`."
+msgstr ""
+
+#: ../../usage/operations.md:38
+msgid ""
+"Les logs des agents ESP (events OTA, self-check, boot) remontent dans les"
+" logs du controller via `POST /v1alpha1/logs`."
+msgstr ""
+
+#: ../../usage/operations.md:43
+msgid "Métriques Prometheus"
+msgstr ""
+
+#: ../../usage/operations.md:45
+msgid ""
+"Le Core expose `/metrics` sur `:8082` (flag `--metrics-bind-address`). "
+"Chaque heartbeat met à jour les gauges du device via le label `node_id`."
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "Métrique"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "Type"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "Source"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`mcunode_heap_free_bytes`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "gauge"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`heap_free`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`mcunode_wifi_rssi_dbm`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`rssi`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`mcunode_uptime_seconds`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`uptime_ms / 1000`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`mcunode_temperature_celsius`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`temp_celsius` (filtrée si `-127.0`)"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`mcunode_task_stack_hwm_bytes`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`task_hwm_min`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`mcunode_last_heartbeat_timestamp`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`ts`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`mcunode_config_generation`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`config_generation`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`mcunode_ota_validated`"
+msgstr ""
+
+#: ../../usage/operations.md
+msgid "`ota_validated` → 0/1"
+msgstr ""
+
+#: ../../usage/operations.md:59
+msgid "Labels communs sur toutes les métriques : `node_id`, `workload`, `chip`."
+msgstr ""
+
+#: ../../usage/operations.md:61
+msgid "Pour scraper avec Prometheus Operator :"
+msgstr ""
+
+#: ../../usage/operations.md:79
+msgid ""
+"Nécessite un Service exposant un port **nommé** `metrics` (ex. `embewi-"
+"core-metrics`, `config/manager/deployment.yaml`) — sans ça, le "
+"ServiceMonitor n'a aucun Endpoints à scraper malgré `/metrics` actif sur "
+"le conteneur."
+msgstr ""
+
+#: ../../usage/operations.md:86
+msgid "Rotation de token"
+msgstr ""
+
+#: ../../usage/operations.md:88
+msgid ""
+"Nécessite `spec.tokenRef` sur le McuNode (Secret dédié par device — voir "
+"`config/samples/mcunode_sample.yaml`). Le fallback historique (Secret "
+"centralisé `embewi-tokens` keyé par `nodeId`, sans `tokenRef`) ne "
+"supporte **pas** la rotation automatisée ci-dessous."
+msgstr ""
+
+#: ../../usage/operations.md:93
+msgid ""
+"Le Core rejoue lui-même `POST /token` — pas d'appel `curl` manuel à faire"
+" :"
+msgstr ""
+
+#: ../../usage/operations.md:111
+msgid ""
+"À partir de là, entièrement automatique "
+"(`internal/controller/mcunode_controller.go`, `reconcileTokenRotation` + "
+"`internal/heartbeat/server.go`, `clearPreviousToken`) :"
+msgstr ""
+
+#: ../../usage/operations.md:122
+msgid "Suivre la progression :"
+msgstr ""
+
+#: ../../usage/operations.md:130
+msgid "Rebooter un device à la demande"
+msgstr ""
+
+#: ../../usage/operations.md:132
+msgid ""
+"Pas de `kubectl rollout restart` pour un CRD (spécifique aux "
+"`deployment`/`daemonset`/`statefulset`) ni de `kubectl delete pod` "
+"équivalent (`delete McuNode` ne touche jamais au device physique — le CRD"
+" le représente, il ne le possède pas). À la place, une annotation :"
+msgstr ""
+
+#: ../../usage/operations.md:147
+msgid ""
+"Une nouvelle valeur (différente de `status.lastRebootRequested`) "
+"redéclenche un reboot — pas besoin de retirer l'annotation entre deux "
+"usages."
+msgstr ""
+
+#: ../../usage/operations.md:150
+msgid "Décommissionner un device en sécurité (firmware « safe-mode »)"
+msgstr ""
+
+#: ../../usage/operations.md:152
+msgid ""
+"`delete McuNode` ne touche jamais au device physique (cf. ci-dessus) — un"
+" actionneur (moteur, relais…) piloté par le workload en cours continue de"
+" tourner sur son dernier état GPIO, orphelin de toute gestion Core. Pour "
+"mettre un device hors service **en sécurité** avant de le "
+"débrancher/déplacer, ne pas essayer de forcer un rollback (§3 contrat) : "
+"ce mécanisme n'est pas pilotable par le Core (il ne s'auto-déclenche que "
+"côté device sur échec de self-check en `pending_verify`) et revient sur "
+"l'**autre slot OTA**, quel qu'il soit — pas une image choisie, "
+"potentiellement une ancienne version qui pilote encore les mêmes GPIO."
+msgstr ""
+
+#: ../../usage/operations.md:162
+msgid ""
+"**Approche recommandée** : un déploiement OTA normal vers un firmware « "
+"safe-mode » dédié — même agent embewi actif (heartbeat, joignable, "
+"gérable), mais qui ne touche **aucun** GPIO actionneur, inerte par "
+"construction. Aucun mécanisme Core spécial : le pipeline OTA standard "
+"(chunking, digest, signature, idempotence, confirmation par heartbeat) "
+"s'applique tel quel."
+msgstr ""
+
+#: ../../usage/operations.md:186
+msgid ""
+"**Limite** : ne fonctionne que si le device est encore **joignable** (Wi-"
+"Fi up, agent qui répond) — adapté à un décommissionnement planifié, pas à"
+" un device déjà bloqué/injoignable (aucun moyen de pousser un OTA vers un"
+" device qu'on ne peut pas contacter)."
+msgstr ""
+
+#: ../../usage/operations.md:191
+msgid ""
+"Une fois le device physiquement retiré, supprimer le `McuDeployment` puis"
+" le `McuNode` (bookkeeping administratif seul, cf. ci-dessus)."
+msgstr ""
+
