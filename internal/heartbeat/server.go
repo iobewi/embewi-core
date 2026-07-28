@@ -98,9 +98,9 @@ type LogPayload struct {
 type Server struct {
 	addr        string
 	client      client.Client
-	TLSCertFile string // chemin PEM du certificat serveur (vide = HTTP plain)
-	TLSKeyFile  string // chemin PEM de la clé privée
-	TokenSecret string // nom du Secret K8s contenant les tokens Bearer (défaut : "embewi-tokens")
+	TLSCertFile string               // chemin PEM du certificat serveur (vide = HTTP plain)
+	TLSKeyFile  string               // chemin PEM de la clé privée
+	TokenSecret string               // nom du Secret K8s contenant les tokens Bearer (défaut : "embewi-tokens")
 	Recorder    record.EventRecorder // émet HeartbeatIPMismatch (§1/§8 contrat) ; nil = détection désactivée
 }
 

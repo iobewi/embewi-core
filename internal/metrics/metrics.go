@@ -75,8 +75,8 @@ func init() {
 // HeartbeatData porte les champs d'un heartbeat nécessaires à la mise à jour des gauges.
 type HeartbeatData struct {
 	NodeID           string
-	Workload         string  // deployment_id du heartbeat
-	Chip             string  // depuis McuNode.Status.Chip (peut être "" avant le premier GET /info)
+	Workload         string // deployment_id du heartbeat
+	Chip             string // depuis McuNode.Status.Chip (peut être "" avant le premier GET /info)
 	HeapFree         int
 	RSSI             int
 	UptimeMs         int64
