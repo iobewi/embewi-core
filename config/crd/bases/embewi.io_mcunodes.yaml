@@ -35,6 +35,15 @@ spec:
                 nodeId:
                   type: string
                   description: "Identifiant node (doit correspondre à EMBEWI_NODE_ID dans le firmware)"
+                tlsSecretRef:
+                  type: object
+                  required: [name]
+                  description: "Secret kubernetes.io/tls (tls.crt/tls.key) à pousser via POST /tls/cert. Absent = cert auto-signé de build"
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
             status:
               type: object
               properties:
@@ -73,6 +82,8 @@ spec:
                 appPort:
                   type: integer
                 apiVersion:
+                  type: string
+                tlsCertDigest:
                   type: string
                 ready:
                   type: boolean

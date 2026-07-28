@@ -790,3 +790,131 @@ func TestPhaseWriting_OCIBlobDigestMismatch_DoesNotAdvanceToActivating(t *testin
 		t.Error("aucun event OTABlobDigestMismatch émis")
 	}
 }
+
+// TestReconcileDeployed_AppPortDiverges_PushesAndUpdatesNodeStatus vérifie la
+// réconciliation POST /app/port (§4 contrat) : port désiré (Spec.AppPort) différent du
+// port observé (McuNode.Status.AppPort) → push, puis mise à jour immédiate du status
+// (sans quoi rien ne rafraîchit ce champ en phase Deployed et le port serait repoussé
+// à chaque reconcile).
+func TestReconcileDeployed_AppPortDiverges_PushesAndUpdatesNodeStatus(t *testing.T) {
+	scheme := deployScheme(t)
+	now := metav1.Now()
+
+	var gotPort int
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1alpha1/app/port" {
+			t.Errorf("chemin inattendu : %s", r.URL.Path)
+		}
+		var body map[string]int
+		json.NewDecoder(r.Body).Decode(&body) //nolint:errcheck
+		gotPort = body["port"]
+		json.NewEncoder(w).Encode(map[string]any{"status": "saved", "port": gotPort}) //nolint:errcheck
+	}))
+	defer ts.Close()
+
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "target-node", Namespace: "embewi"},
+		Spec:       v1alpha1.McuNodeSpec{NodeID: "esp-1"},
+		Status: v1alpha1.McuNodeStatus{
+			State: "running", IP: strings.TrimPrefix(ts.URL, "https://"),
+			LastHeartbeat: &now, AppPort: 8080,
+		},
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "embewi-tokens", Namespace: "embewi"},
+		Data:       map[string][]byte{"esp-1": []byte("test-token")},
+	}
+	dep := &v1alpha1.McuDeployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "port-dep", Namespace: "embewi"},
+		Spec: v1alpha1.McuDeploymentSpec{
+			NodeName: "target-node",
+			Firmware: v1alpha1.FirmwareSpec{Image: "reg/fw:v1"},
+			AppPort:  9090,
+		},
+	}
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(dep, node, secret).
+		WithStatusSubresource(&v1alpha1.McuDeployment{}, &v1alpha1.McuNode{}).
+		Build()
+
+	depPatch := dep.DeepCopy()
+	depPatch.Status.Phase = v1alpha1.PhaseDeployed
+	depPatch.Status.BoundNode = node.Name
+	fc.Status().Update(context.Background(), depPatch) //nolint:errcheck
+
+	r := &controller.McuDeploymentReconciler{
+		Client: fc, Scheme: scheme, TokenSecret: "embewi-tokens", Recorder: record.NewFakeRecorder(10),
+	}
+	reconcile(t, r, dep.Name, dep.Namespace)
+
+	if gotPort != 9090 {
+		t.Fatalf("port poussé : got %d, want 9090", gotPort)
+	}
+
+	var updatedNode v1alpha1.McuNode
+	fc.Get(context.Background(), types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, &updatedNode) //nolint:errcheck
+	if updatedNode.Status.AppPort != 9090 {
+		t.Errorf("McuNode.Status.AppPort : got %d, want 9090 (doit refléter le push immédiatement)", updatedNode.Status.AppPort)
+	}
+
+	rec := r.Recorder.(*record.FakeRecorder)
+	select {
+	case ev := <-rec.Events:
+		if !strings.Contains(ev, "AppPortUpdated") {
+			t.Errorf("event reçu ne contient pas AppPortUpdated : %q", ev)
+		}
+	default:
+		t.Error("aucun event AppPortUpdated émis")
+	}
+}
+
+// TestReconcileDeployed_AppPortMatches_NoPush vérifie qu'aucun appel n'est fait quand
+// le port désiré correspond déjà au port observé.
+func TestReconcileDeployed_AppPortMatches_NoPush(t *testing.T) {
+	scheme := deployScheme(t)
+	now := metav1.Now()
+
+	called := false
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		json.NewEncoder(w).Encode(map[string]any{"status": "saved"}) //nolint:errcheck
+	}))
+	defer ts.Close()
+
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "target-node", Namespace: "embewi"},
+		Spec:       v1alpha1.McuNodeSpec{NodeID: "esp-1"},
+		Status: v1alpha1.McuNodeStatus{
+			State: "running", IP: strings.TrimPrefix(ts.URL, "https://"),
+			LastHeartbeat: &now, AppPort: 9090,
+		},
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "embewi-tokens", Namespace: "embewi"},
+		Data:       map[string][]byte{"esp-1": []byte("test-token")},
+	}
+	dep := &v1alpha1.McuDeployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "port-dep", Namespace: "embewi"},
+		Spec: v1alpha1.McuDeploymentSpec{
+			NodeName: "target-node",
+			Firmware: v1alpha1.FirmwareSpec{Image: "reg/fw:v1"},
+			AppPort:  9090,
+		},
+	}
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(dep, node, secret).
+		WithStatusSubresource(&v1alpha1.McuDeployment{}, &v1alpha1.McuNode{}).
+		Build()
+
+	depPatch := dep.DeepCopy()
+	depPatch.Status.Phase = v1alpha1.PhaseDeployed
+	depPatch.Status.BoundNode = node.Name
+	fc.Status().Update(context.Background(), depPatch) //nolint:errcheck
+
+	r := &controller.McuDeploymentReconciler{
+		Client: fc, Scheme: scheme, TokenSecret: "embewi-tokens", Recorder: record.NewFakeRecorder(10),
+	}
+	reconcile(t, r, dep.Name, dep.Namespace)
+
+	if called {
+		t.Error("POST /app/port ne devait pas être appelé (port déjà à jour)")
+	}
+}

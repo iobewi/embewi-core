@@ -66,6 +66,16 @@ réseau que le cluster utilise pour savoir si l'ESP est opérationnel.
 Le McuNode est défini comme **owner** du Service et de l'EndpointSlice via
 `controllerutil.SetControllerReference` — suppression en cascade automatique.
 
+### Rotation de certificat TLS (`POST /tls/cert`)
+
+Si `spec.tlsSecretRef` référence un Secret `kubernetes.io/tls` (clés `tls.crt`/
+`tls.key` — compatible cert-manager), le reconciler compare son contenu à
+`Status.TLSCertDigest` (sha256, suivi Core-side : contrairement à la config §4a, le
+protocole n'expose aucun digest de cert via `GET /info`). Différent → `POST /tls/cert`
+puis `POST /reboot` (effectif au prochain `embewi_http_start()`), puis
+`Status.TLSCertDigest` mis à jour. Absent = l'agent garde son certificat auto-signé de
+build.
+
 ---
 
 ## McuDeployment reconciler
@@ -205,6 +215,13 @@ La réconciliation **n'est pas terminale** en phase Deployed. Le reconciler surv
 
 2. **Config drift** (si `spec.configMapRef` renseigné) : si le McuConfigMap change,
    la config est re-poussée et le device reboot. Déclenché par le watch McuConfigMap.
+
+3. **Port applicatif** (si `spec.appPort` renseigné, `POST /app/port`) : si `spec.appPort`
+   diverge de `McuNode.Status.AppPort` (port observé, peuplé depuis `GET /info`), le
+   nouveau port est poussé. **Pas de reboot** : l'agent redémarre son service app à
+   chaud. `Status.AppPort` est mis à jour immédiatement après le push confirmé — sans
+   ça rien ne le rafraîchirait en phase Deployed (`GET /info` n'est appelé que pendant
+   les phases OTA) et le port serait repoussé à chaque reconcile.
 
 ### Phase Failed
 

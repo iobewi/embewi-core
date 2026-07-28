@@ -2,6 +2,9 @@ package controller_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,8 +14,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
-	discoveryv1 "k8s.io/api/discovery/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -384,5 +387,171 @@ func TestReconcile_Deletion_CleansUpMetrics(t *testing.T) {
 
 	if got := testutil.ToFloat64(metrics.HeapFreeBytes.With(lbl)); got != 0 {
 		t.Errorf("gauge non nettoyée après suppression : got %.0f, want 0", got)
+	}
+}
+
+// TestReconcileTLSCert_NewCert_PushesRebootsAndUpdatesDigest vérifie la réconciliation
+// POST /tls/cert (§4 contrat) : Secret référencé diverge du digest stocké → push,
+// reboot, puis Status.TLSCertDigest mis à jour (suivi Core-side, pas d'équivalent
+// generation/active_generation côté agent pour le cert).
+func TestReconcileTLSCert_NewCert_PushesRebootsAndUpdatesDigest(t *testing.T) {
+	scheme := nodeScheme(t)
+
+	const certPEM = "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n"
+	const keyPEM = "-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----\n"
+
+	var gotCert, gotKey string
+	var rebootCalled bool
+	device := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1alpha1/tls/cert":
+			var body map[string]string
+			json.NewDecoder(r.Body).Decode(&body) //nolint:errcheck
+			gotCert, gotKey = body["cert_pem"], body["key_pem"]
+			json.NewEncoder(w).Encode(map[string]any{"status": "saved"}) //nolint:errcheck
+		case "/v1alpha1/reboot":
+			rebootCalled = true
+			json.NewEncoder(w).Encode(map[string]any{"status": "rebooting"}) //nolint:errcheck
+		default:
+			t.Errorf("chemin inattendu : %s", r.URL.Path)
+		}
+	}))
+	defer device.Close()
+
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-tls", Namespace: "embewi"},
+		Spec: v1alpha1.McuNodeSpec{
+			NodeID:       "esp-tls-id",
+			TokenRef:     v1alpha1.SecretRef{Name: "esp-tls-token"},
+			TLSSecretRef: v1alpha1.SecretRef{Name: "esp-tls-cert"},
+		},
+		Status: v1alpha1.McuNodeStatus{IP: device.Listener.Addr().String()},
+	}
+	tokenSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-tls-token", Namespace: "embewi"},
+		Data:       map[string][]byte{"token": []byte("test-token")},
+	}
+	tlsSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-tls-cert", Namespace: "embewi"},
+		Data:       map[string][]byte{"tls.crt": []byte(certPEM), "tls.key": []byte(keyPEM)},
+	}
+
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node, tokenSecret, tlsSecret).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	r := &controller.McuNodeReconciler{Client: fc, Scheme: scheme, Recorder: record.NewFakeRecorder(10)}
+	reconcileNode(t, r, node.Name, node.Namespace)
+
+	if gotCert != certPEM {
+		t.Errorf("cert_pem : got %q, want %q", gotCert, certPEM)
+	}
+	if gotKey != keyPEM {
+		t.Errorf("key_pem : got %q, want %q", gotKey, keyPEM)
+	}
+	if !rebootCalled {
+		t.Error("POST /reboot devait être appelé après le push du cert")
+	}
+
+	sum := sha256.Sum256(append(append([]byte{}, certPEM...), keyPEM...))
+	wantDigest := hex.EncodeToString(sum[:])
+
+	var updated v1alpha1.McuNode
+	fc.Get(context.Background(), types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, &updated) //nolint:errcheck
+	if updated.Status.TLSCertDigest != wantDigest {
+		t.Errorf("TLSCertDigest : got %q, want %q", updated.Status.TLSCertDigest, wantDigest)
+	}
+}
+
+// TestReconcileTLSCert_DigestUnchanged_NoOp vérifie qu'aucun appel n'est fait quand le
+// digest du Secret référencé correspond déjà à celui stocké dans le status.
+func TestReconcileTLSCert_DigestUnchanged_NoOp(t *testing.T) {
+	scheme := nodeScheme(t)
+
+	const certPEM = "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n"
+	const keyPEM = "-----BEGIN EC PRIVATE KEY-----\nfake\n-----END EC PRIVATE KEY-----\n"
+	sum := sha256.Sum256(append(append([]byte{}, certPEM...), keyPEM...))
+	digest := hex.EncodeToString(sum[:])
+
+	called := false
+	device := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		json.NewEncoder(w).Encode(map[string]any{"status": "saved"}) //nolint:errcheck
+	}))
+	defer device.Close()
+
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-tls2", Namespace: "embewi"},
+		Spec: v1alpha1.McuNodeSpec{
+			NodeID:       "esp-tls2-id",
+			TokenRef:     v1alpha1.SecretRef{Name: "esp-tls2-token"},
+			TLSSecretRef: v1alpha1.SecretRef{Name: "esp-tls2-cert"},
+		},
+		Status: v1alpha1.McuNodeStatus{IP: device.Listener.Addr().String()},
+	}
+	tokenSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-tls2-token", Namespace: "embewi"},
+		Data:       map[string][]byte{"token": []byte("test-token")},
+	}
+	tlsSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-tls2-cert", Namespace: "embewi"},
+		Data:       map[string][]byte{"tls.crt": []byte(certPEM), "tls.key": []byte(keyPEM)},
+	}
+
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node, tokenSecret, tlsSecret).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	nodePatch := node.DeepCopy()
+	nodePatch.Status.TLSCertDigest = digest
+	fc.Status().Update(context.Background(), nodePatch) //nolint:errcheck
+
+	r := &controller.McuNodeReconciler{Client: fc, Scheme: scheme, Recorder: record.NewFakeRecorder(10)}
+	reconcileNode(t, r, node.Name, node.Namespace)
+
+	if called {
+		t.Error("POST /tls/cert ne devait pas être appelé (digest déjà appliqué)")
+	}
+}
+
+// TestReconcileTLSCert_NoSecretRef_NoOp vérifie l'absence d'appel quand
+// Spec.TLSSecretRef n'est pas renseigné (fallback cert auto-signé de build).
+func TestReconcileTLSCert_NoSecretRef_NoOp(t *testing.T) {
+	scheme := nodeScheme(t)
+	called := false
+	device := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer device.Close()
+
+	node := &v1alpha1.McuNode{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-tls3", Namespace: "embewi"},
+		Spec: v1alpha1.McuNodeSpec{
+			NodeID:   "esp-tls3-id",
+			TokenRef: v1alpha1.SecretRef{Name: "esp-tls3-token"},
+		},
+		Status: v1alpha1.McuNodeStatus{IP: device.Listener.Addr().String()},
+	}
+	tokenSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "esp-tls3-token", Namespace: "embewi"},
+		Data:       map[string][]byte{"token": []byte("test-token")},
+	}
+
+	fc := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(node, tokenSecret).
+		WithStatusSubresource(&v1alpha1.McuNode{}).
+		Build()
+
+	r := &controller.McuNodeReconciler{Client: fc, Scheme: scheme, Recorder: record.NewFakeRecorder(10)}
+	reconcileNode(t, r, node.Name, node.Namespace)
+
+	if called {
+		t.Error("aucun appel ne devait être fait sans TLSSecretRef")
 	}
 }

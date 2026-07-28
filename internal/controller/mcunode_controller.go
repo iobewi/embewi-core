@@ -3,6 +3,8 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -144,6 +146,9 @@ func (r *McuNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		if err := r.reconcileTokenRotation(ctx, &node); err != nil {
 			return ctrl.Result{}, fmt.Errorf("reconcile token rotation: %w", err)
+		}
+		if err := r.reconcileTLSCert(ctx, &node); err != nil {
+			return ctrl.Result{}, fmt.Errorf("reconcile tls cert: %w", err)
 		}
 	}
 
@@ -303,6 +308,88 @@ func (r *McuNodeReconciler) reconcileTokenRotation(ctx context.Context, node *v1
 	if r.Recorder != nil {
 		r.Recorder.Event(node, corev1.EventTypeNormal, "TokenRotationApplied",
 			"POST /token accepté par le device ; confirmation attendue par heartbeat (newToken)")
+	}
+	return nil
+}
+
+// reconcileTLSCert pousse un nouveau certificat TLS si le Secret référencé par
+// Spec.TLSSecretRef diverge du dernier digest appliqué avec succès (§4 contrat,
+// POST /tls/cert). Contrairement à la config (§4a, generation/active_generation),
+// l'agent n'expose aucun digest de cert via GET /info — le suivi de « déjà
+// appliqué » se fait donc entièrement côté Core, via Status.TLSCertDigest.
+// Un reboot est requis après le push (effectif au prochain embewi_http_start()) ;
+// le digest n'est mis à jour qu'après un reboot confirmé accepté, pour ne pas
+// perdre la trace d'un cert poussé mais pas encore actif en cas d'échec du reboot.
+func (r *McuNodeReconciler) reconcileTLSCert(ctx context.Context, node *v1alpha1.McuNode) error {
+	if node.Spec.TLSSecretRef.Name == "" {
+		return nil // pas de cert géré par le Core : fallback auto-signé de build
+	}
+	if node.Spec.TokenRef.Name == "" {
+		return nil // pas de support pour le Secret centralisé legacy (cf. reconcileTokenRotation)
+	}
+
+	tlsNS := node.Spec.TLSSecretRef.Namespace
+	if tlsNS == "" {
+		tlsNS = node.Namespace
+	}
+	var tlsSecret corev1.Secret
+	if err := r.Get(ctx, client.ObjectKey{Name: node.Spec.TLSSecretRef.Name, Namespace: tlsNS}, &tlsSecret); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	certPEM := tlsSecret.Data["tls.crt"]
+	keyPEM := tlsSecret.Data["tls.key"]
+	if len(certPEM) == 0 || len(keyPEM) == 0 {
+		return fmt.Errorf("secret TLS %q/%q: tls.crt/tls.key manquants", tlsNS, node.Spec.TLSSecretRef.Name)
+	}
+	sum := sha256.Sum256(append(append([]byte{}, certPEM...), keyPEM...))
+	digest := hex.EncodeToString(sum[:])
+	if digest == node.Status.TLSCertDigest {
+		return nil // déjà appliqué
+	}
+
+	tokenNS := node.Spec.TokenRef.Namespace
+	if tokenNS == "" {
+		tokenNS = node.Namespace
+	}
+	var tokenSecret corev1.Secret
+	if err := r.Get(ctx, client.ObjectKey{Name: node.Spec.TokenRef.Name, Namespace: tokenNS}, &tokenSecret); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	token := strings.TrimSpace(string(tokenSecret.Data["token"]))
+	if token == "" {
+		return nil
+	}
+
+	logger := log.FromContext(ctx).WithValues("node", node.Spec.NodeID)
+	cli := agent.New(node.Status.IP, token)
+	if err := cli.PostTLSCert(string(certPEM), string(keyPEM)); err != nil {
+		logger.Info("POST /tls/cert a échoué, nouvelle tentative au prochain reconcile", "error", err.Error())
+		if r.Recorder != nil {
+			r.Recorder.Eventf(node, corev1.EventTypeWarning, "TLSCertRotationFailed",
+				"POST /tls/cert a échoué : %v (nouvelle tentative au prochain reconcile)", err)
+		}
+		return nil
+	}
+	if err := cli.PostReboot(); err != nil {
+		// Cert accepté côté device (NVS) mais reboot pas confirmé : ne pas marquer
+		// TLSCertDigest comme appliqué, on retentera POST /tls/cert (idempotent) au
+		// prochain reconcile.
+		logger.Info("cert accepté mais POST /reboot a échoué, nouvelle tentative au prochain reconcile", "error", err.Error())
+		if r.Recorder != nil {
+			r.Recorder.Eventf(node, corev1.EventTypeWarning, "TLSCertRotationFailed",
+				"cert accepté mais POST /reboot a échoué : %v (nouvelle tentative au prochain reconcile)", err)
+		}
+		return nil
+	}
+
+	patch := client.MergeFrom(node.DeepCopy())
+	node.Status.TLSCertDigest = digest
+	if err := r.Status().Patch(ctx, node, patch); err != nil {
+		return fmt.Errorf("patch TLSCertDigest: %w", err)
+	}
+	logger.Info("certificat TLS mis à jour, device rebooté")
+	if r.Recorder != nil {
+		r.Recorder.Event(node, corev1.EventTypeNormal, "TLSCertRotated", "certificat TLS mis à jour, device rebooté")
 	}
 	return nil
 }

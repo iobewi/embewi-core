@@ -44,6 +44,14 @@ type McuNodeSpec struct {
 	// previousToken, un crash Core juste après l'écriture du Secret rend le device
 	// injoignable en inbound (seul recours : portail captif).
 	TokenRef SecretRef `json:"tokenRef"`
+
+	// TLSSecretRef référence un Secret K8s de type kubernetes.io/tls (clés
+	// data["tls.crt"]/data["tls.key"]) à pousser vers le device via POST
+	// /tls/cert (§4 contrat) — rotation de certificat sans cycle OTA. Absent =
+	// le device garde son certificat auto-signé de build. Compatible avec un
+	// Secret géré par cert-manager (renouvellement automatique transparent).
+	// +optional
+	TLSSecretRef SecretRef `json:"tlsSecretRef,omitempty"`
 }
 
 type McuNodeStatus struct {
@@ -83,6 +91,13 @@ type McuNodeStatus struct {
 	// ApiVersion : version de protocole négociée avec le device (contrat §4,
 	// découverte de version d'API). Vide tant qu'aucun GET /info n'a réussi.
 	ApiVersion string `json:"apiVersion,omitempty"`
+
+	// TLSCertDigest : sha256(tls.crt+tls.key) du dernier certificat TLS appliqué
+	// avec succès (POST /tls/cert confirmé + reboot). Pas d'équivalent
+	// generation/active_generation côté agent pour le cert (contrairement à la
+	// config §4a) : ce suivi est purement Core-side, sert à détecter qu'un
+	// nouveau push est nécessaire quand Spec.TLSSecretRef change.
+	TLSCertDigest string `json:"tlsCertDigest,omitempty"`
 
 	// Ready pilote EndpointSlice.ready (§8 contrat).
 	// true ssi state==running && ota_validated==true && heartbeat récent.

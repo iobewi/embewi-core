@@ -50,6 +50,11 @@ spec:
                       type: string
                     version:
                       type: string
+                appPort:
+                  type: integer
+                  description: "Port TCP désiré du service applicatif embarqué (POST /app/port). 0 = pas de reconfiguration"
+                  minimum: 1024
+                  maximum: 65535
             status:
               type: object
               properties:

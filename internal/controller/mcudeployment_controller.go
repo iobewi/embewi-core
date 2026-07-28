@@ -789,10 +789,43 @@ func (r *McuDeploymentReconciler) reconcileDeployed(ctx context.Context, dep *v1
 		return ctrl.Result{}, err
 	}
 
+	if dep.Spec.AppPort != 0 && dep.Spec.AppPort != node.Status.AppPort {
+		_, cli, err := r.nodeClient(ctx, dep)
+		if err != nil {
+			log.FromContext(ctx).Error(err, "nodeClient unavailable pour app_port, retry dans 30s")
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		}
+		if err := r.reconcileAppPort(ctx, cli, &node, dep); err != nil {
+			log.FromContext(ctx).Error(err, "reconcileAppPort échoué (transitoire)")
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		}
+	}
+
 	if dep.Spec.ConfigMapRef != "" {
 		return r.reconcileConfigOnly(ctx, dep)
 	}
 	return ctrl.Result{}, nil
+}
+
+// reconcileAppPort pousse le port applicatif désiré vers le device s'il diverge du
+// port observé (§4 contrat, POST /app/port). Pas de reboot requis : l'agent redémarre
+// son service app à chaud (embewi_app_service_stop/start côté firmware). Met aussi à
+// jour McuNode.Status.AppPort immédiatement après un push confirmé — sans ça, rien ne
+// rafraîchit ce champ en phase Deployed (seul GET /info le fait, appelé uniquement
+// pendant les phases OTA), et ce reconcile repousserait le port à chaque passage.
+func (r *McuDeploymentReconciler) reconcileAppPort(ctx context.Context, cli *agent.Client, node *v1alpha1.McuNode, dep *v1alpha1.McuDeployment) error {
+	if err := cli.PostAppPort(dep.Spec.AppPort); err != nil {
+		return fmt.Errorf("POST /app/port: %w", err)
+	}
+	patch := client.MergeFrom(node.DeepCopy())
+	node.Status.AppPort = dep.Spec.AppPort
+	if err := r.Status().Patch(ctx, node, patch); err != nil {
+		log.FromContext(ctx).Error(err, "patch McuNode.Status.AppPort échoué (non bloquant, prochain GET /info corrigera)")
+	}
+	log.FromContext(ctx).Info("port applicatif reconfiguré", "port", dep.Spec.AppPort)
+	r.Recorder.Event(dep, corev1.EventTypeNormal, "AppPortUpdated",
+		fmt.Sprintf("port applicatif reconfiguré à %d", dep.Spec.AppPort))
+	return nil
 }
 
 func (r *McuDeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {

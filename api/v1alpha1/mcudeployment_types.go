@@ -34,6 +34,15 @@ type McuDeploymentSpec struct {
 	// Absent = pas de push config, défauts build actifs.
 	// +optional
 	ConfigMapRef string `json:"configMapRef,omitempty"`
+
+	// AppPort : port TCP désiré du service applicatif embarqué (§4 contrat,
+	// POST /app/port). 0 (absent) = pas de reconfiguration, port par défaut du
+	// build actif. Contrainte contrat : 1024 ≤ port ≤ 65535. Pas de reboot
+	// requis — l'agent redémarre son service app à chaud.
+	// +optional
+	// +kubebuilder:validation:Minimum=1024
+	// +kubebuilder:validation:Maximum=65535
+	AppPort int `json:"appPort,omitempty"`
 }
 
 type FirmwareSpec struct {
@@ -52,14 +61,14 @@ type FirmwareSpec struct {
 type McuDeploymentPhase string
 
 const (
-	PhaseBinding      McuDeploymentPhase = "Binding"      // résolution du McuNode cible
-	PhasePulling      McuDeploymentPhase = "Pulling"      // pull artefact OCI
-	PhasePreparing    McuDeploymentPhase = "Preparing"    // POST /ota/prepare
-	PhaseWriting      McuDeploymentPhase = "Writing"      // PUT /ota/write
-	PhaseActivating   McuDeploymentPhase = "Activating"   // POST /ota/activate + reboot
-	PhaseConfirming   McuDeploymentPhase = "Confirming"   // attente heartbeat running
-	PhaseDeployed     McuDeploymentPhase = "Deployed"     // ota_validated=true confirmé
-	PhaseFailed       McuDeploymentPhase = "Failed"       // erreur terminale
+	PhaseBinding    McuDeploymentPhase = "Binding"    // résolution du McuNode cible
+	PhasePulling    McuDeploymentPhase = "Pulling"    // pull artefact OCI
+	PhasePreparing  McuDeploymentPhase = "Preparing"  // POST /ota/prepare
+	PhaseWriting    McuDeploymentPhase = "Writing"    // PUT /ota/write
+	PhaseActivating McuDeploymentPhase = "Activating" // POST /ota/activate + reboot
+	PhaseConfirming McuDeploymentPhase = "Confirming" // attente heartbeat running
+	PhaseDeployed   McuDeploymentPhase = "Deployed"   // ota_validated=true confirmé
+	PhaseFailed     McuDeploymentPhase = "Failed"     // erreur terminale
 )
 
 type McuDeploymentStatus struct {
